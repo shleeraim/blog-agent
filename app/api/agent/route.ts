@@ -6,17 +6,20 @@ import {
   getDirectionPrompt,
   getDraftPrompt,
   getFreeformPrompt,
+  getEvaluatePrompt,
 } from '@/lib/prompts';
 
 // ──────────────────────────────────────────────
 // Types
 // ──────────────────────────────────────────────
 
-type Step = 'topic' | 'direction' | 'draft' | 'freeform';
+type Step = 'topic' | 'evaluate' | 'direction' | 'draft' | 'freeform';
 
 interface RequestBody {
   step: Step;
   userMessage: string;
+  topics?: string[];
+  categories?: string[];
   history: { role: 'user' | 'assistant'; content: string }[];
   settings: Settings;
 }
@@ -42,7 +45,7 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  const { step, userMessage, history, settings } = body;
+  const { step, userMessage, topics, categories, history, settings } = body;
 
   // 2. 환경 변수 확인
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -65,6 +68,54 @@ export async function POST(req: NextRequest) {
         Connection: 'keep-alive',
       },
     });
+  }
+
+  // 3a. evaluate 스텝: 스트리밍 없이 단순 JSON 응답
+  if (step === 'evaluate') {
+    const evalTopics = topics ?? [];
+    const evalCategories = categories ?? settings?.categories ?? [];
+
+    if (evalTopics.length === 0) {
+      return new Response(JSON.stringify({ error: 'topics 배열이 필요합니다.' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    const client = new Anthropic({ apiKey });
+    try {
+      const response = await client.messages.create({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 1500,
+        system: getEvaluatePrompt(evalTopics, evalCategories),
+        messages: [{ role: 'user', content: '위 5개 주제를 평가해주세요.' }],
+      });
+
+      const rawText = response.content
+        .filter((b) => b.type === 'text')
+        .map((b) => (b as { type: 'text'; text: string }).text)
+        .join('');
+
+      let parsed: { evaluations: unknown[]; selection_reason: string };
+      try {
+        parsed = JSON.parse(rawText);
+      } catch {
+        return new Response(JSON.stringify({ error: '모델 응답을 JSON으로 파싱할 수 없습니다.', raw: rawText }), {
+          status: 502,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      return new Response(JSON.stringify(parsed), {
+        headers: { 'Content-Type': 'application/json' },
+      });
+    } catch (err: unknown) {
+      const message = parseAnthropicError(err instanceof Error ? err : new Error(String(err)));
+      return new Response(JSON.stringify({ error: message }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
   }
 
   // 3. 시스템 프롬프트 선택
@@ -94,7 +145,7 @@ export async function POST(req: NextRequest) {
   const stream = new ReadableStream({
     async start(controller) {
       try {
-        const tokenMap: Record<string, number> = { topic: 3000, direction: 4000, draft: 8192, freeform: 4000 };
+        const tokenMap: Record<string, number> = { topic: 3000, evaluate: 1500, direction: 4000, draft: 8192, freeform: 4000 };
         const maxTokens = tokenMap[step] ?? 4000;
 
         const requestParams: Parameters<typeof client.messages.stream>[0] = {

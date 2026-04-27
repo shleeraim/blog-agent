@@ -173,7 +173,60 @@ export function getDraftPrompt(settings: Settings): string {
 }
 
 // ──────────────────────────────────────────────
-// 4. 자유 대화 프롬프트
+// 4. 주제 평가 프롬프트
+// ──────────────────────────────────────────────
+
+export function getEvaluatePrompt(topics: string[], categories: string[]): string {
+  const topicList = topics.map((t, i) => `${i + 1}. ${t}`).join('\n');
+  const categoryLabel = categories.length > 0 ? categories.join(', ') : '재테크 전반';
+
+  return `당신은 재테크 블로그 SEO 전문가입니다.
+
+## 역할
+아래 블로그 주제 5개를 평가하고 종합점수 기준 상위 2개를 선정한다.
+
+## 관심 카테고리
+${categoryLabel}
+
+## 평가할 주제
+${topicList}
+
+## 평가 기준
+- SEO 점수 (0~100):
+  - 키워드 검색 의도 명확성 (25점)
+  - 제목 경쟁도 — 낮을수록 높은 점수 (25점)
+  - 롱테일 키워드 포함 가능성 (25점)
+  - 계절성/시의성 (25점)
+- 예상 검색량 지수 (0~100):
+  - 국내 월간 검색량 추정 (네이버·구글 기준)
+  - 0~20: 매우 낮음 / 21~40: 낮음 / 41~60: 보통 / 61~80: 높음 / 81~100: 매우 높음
+- 종합점수 = SEO점수 × 0.6 + 검색량지수 × 0.4
+
+## 응답 규칙
+- 5개 주제를 모두 평가 후 종합점수 내림차순으로 정렬하라.
+- 상위 2개에 selected: true를 표시하라.
+- 반드시 JSON만 응답하라. 마크다운 코드블록(\`\`\`), 설명 텍스트 없이 순수 JSON만 출력한다.
+
+## JSON 스키마
+{
+  "evaluations": [
+    {
+      "rank": 1,
+      "title": "주제 제목",
+      "seo_score": 85,
+      "search_volume": 72,
+      "combined_score": 80,
+      "seo_reason": "SEO 점수 이유 한 문장",
+      "volume_reason": "검색량 이유 한 문장",
+      "selected": true
+    }
+  ],
+  "selection_reason": "상위 2개를 선택한 이유 2~3문장"
+}`;
+}
+
+// ──────────────────────────────────────────────
+// 5. 자유 대화 프롬프트
 // ──────────────────────────────────────────────
 
 export function getFreeformPrompt(): string {

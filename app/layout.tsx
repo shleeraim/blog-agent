@@ -4,6 +4,7 @@ import { LeftSidebar } from '@/components/layout/LeftSidebar';
 import { RightPanel } from '@/components/layout/RightPanel';
 import { MobileLayout } from '@/components/layout/MobileLayout';
 import { HeaderNav } from '@/components/layout/HeaderNav';
+import { ModeToggle } from '@/components/ModeToggle';
 import { Toaster } from '@/components/ui/sonner';
 
 export const metadata: Metadata = {
@@ -80,19 +81,19 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             {/* Center nav */}
             <HeaderNav />
 
-            {/* Status */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span
-                style={{
-                  width: '8px',
-                  height: '8px',
-                  borderRadius: '50%',
-                  background: '#3fb950',
-                  boxShadow: '0 0 6px #3fb95088',
-                  display: 'inline-block',
-                }}
-              />
-              <span style={{ fontSize: '12px', color: '#8b949e' }}>준비됨</span>
+            {/* 모드 토글 + 상태 */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <ModeToggle />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                <span
+                  style={{
+                    width: '7px', height: '7px', borderRadius: '50%',
+                    background: '#3fb950', boxShadow: '0 0 5px #3fb95088',
+                    display: 'inline-block',
+                  }}
+                />
+                <span style={{ fontSize: '11px', color: '#484f58' }}>ON</span>
+              </div>
             </div>
           </header>
 

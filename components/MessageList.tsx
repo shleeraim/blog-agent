@@ -182,6 +182,8 @@ function MessageRow({
         {msg.type === 'topics' && msg.data ? (
           <TopicCards
             data={msg.data as TopicResult}
+            evaluations={[]}
+            isEvaluating={false}
             onSelect={onTopicSelect ?? (() => {})}
           />
         ) : msg.type === 'direction' && msg.data ? (

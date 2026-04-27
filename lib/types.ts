@@ -2,7 +2,18 @@
 // Blog Agent - Type Definitions
 // ============================================================
 
-export type Step = 'topic' | 'direction' | 'draft' | 'freeform';
+export type Step = 'topic' | 'evaluate' | 'direction' | 'draft' | 'freeform';
+
+export interface TopicEvaluation {
+  rank: number;
+  title: string;
+  seo_score: number;
+  search_volume: number;
+  combined_score: number;
+  seo_reason: string;
+  volume_reason: string;
+  selected: boolean;
+}
 
 export interface Message {
   id: string;

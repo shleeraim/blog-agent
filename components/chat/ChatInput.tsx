@@ -6,6 +6,7 @@ import { useAgentStore } from '@/lib/store';
 interface ChatInputProps {
   onSubmit: (text: string) => void;
   disabled?: boolean;
+  placeholder?: string;
 }
 
 const STEP_PLACEHOLDERS: Record<number, string> = {
@@ -15,13 +16,13 @@ const STEP_PLACEHOLDERS: Record<number, string> = {
   4: '수정 요청이나 추가 작업을 입력하세요...',
 };
 
-export function ChatInput({ onSubmit, disabled = false }: ChatInputProps) {
+export function ChatInput({ onSubmit, disabled = false, placeholder: placeholderOverride }: ChatInputProps) {
   const [text, setText] = useState('');
   const [focused, setFocused] = useState(false);
   const { currentStep } = useAgentStore();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const placeholder = STEP_PLACEHOLDERS[currentStep] ?? '메시지를 입력하세요';
+  const placeholder = placeholderOverride ?? (STEP_PLACEHOLDERS[currentStep] ?? '메시지를 입력하세요');
   const canSubmit = text.trim().length > 0 && !disabled;
 
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
