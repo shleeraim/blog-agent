@@ -8,6 +8,7 @@ import {
   getFreeformPrompt,
   getEvaluatePrompt,
 } from '@/lib/prompts';
+import { extractJson } from '@/lib/utils';
 
 // ──────────────────────────────────────────────
 // Types
@@ -98,7 +99,7 @@ export async function POST(req: NextRequest) {
 
       let parsed: { evaluations: unknown[]; selection_reason: string };
       try {
-        parsed = JSON.parse(rawText);
+        parsed = JSON.parse(extractJson(rawText));
       } catch {
         return new Response(JSON.stringify({ error: '모델 응답을 JSON으로 파싱할 수 없습니다.', raw: rawText }), {
           status: 502,
