@@ -131,28 +131,16 @@ export default function Home() {
       let evalSuccess = false;
 
       try {
-        const res = await fetch('/api/agent', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            step: 'evaluate',
+        await sendMessageRef.current('위 5개 주제를 평가해주세요.', 'evaluate', {
+          noStepAdvance: true,
+          silent: true,
+          extraPayload: {
             topics: topics.map((t) => t.title),
             categories: settings.categories,
-            settings,
-          }),
+          },
         });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
-
-        const st = useAgentStore.getState();
-        st.setEvaluations(data.evaluations ?? []);
-        st.setSelectionReason(data.selection_reason ?? '');
-        const sel: TopicEvaluation[] = ((data.evaluations ?? []) as TopicEvaluation[])
-          .filter((e) => e.selected)
-          .sort((a, b) => a.rank - b.rank);
-        st.setSelectedTopics(sel);
-        selected = sel;
-        evalSuccess = sel.length >= 2;
+        selected = useAgentStore.getState().selectedTopics;
+        evalSuccess = selected.length >= 2;
       } catch {
         evalSuccess = false;
       } finally {

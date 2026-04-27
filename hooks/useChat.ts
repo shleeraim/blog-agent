@@ -3,7 +3,7 @@
 import { useCallback, useRef } from 'react';
 import { useAgentStore } from '@/lib/store';
 import { extractJson } from '@/lib/utils';
-import type { Step, TopicResult, DirectionResult, DraftResult } from '@/lib/types';
+import type { Step, TopicResult, TopicEvaluation, DirectionResult, DraftResult } from '@/lib/types';
 
 interface UseChatOptions {
   onStreamStart?: () => void;
@@ -13,10 +13,10 @@ interface UseChatOptions {
 }
 
 export interface SendOptions {
-  // 스텝 자동 전진 억제 (파이프라인 모드에서 사용)
   noStepAdvance?: boolean;
-  // 유저 메시지 말풍선 숨기기
   silent?: boolean;
+  // evaluate 등에서 topics/categories 같은 추가 필드를 API에 전달
+  extraPayload?: Record<string, unknown>;
 }
 
 export function useChat({
@@ -57,7 +57,7 @@ export function useChat({
         const res = await fetch('/api/agent', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ step, userMessage, history: apiHistory, settings }),
+          body: JSON.stringify({ step, userMessage, history: apiHistory, settings, ...options?.extraPayload }),
           signal: abortRef.current.signal,
         });
 
@@ -99,6 +99,13 @@ export function useChat({
                       st.setTopics(result.topics);
                       st.addMessage({ role: 'agent', content: result.intro, type: 'topics', data: result });
                       if (!options?.noStepAdvance) st.setStep(2);
+                    } else if (step === 'evaluate') {
+                      const result = parsed as { evaluations: TopicEvaluation[]; selection_reason: string };
+                      const evaluations = result.evaluations ?? [];
+                      st.setEvaluations(evaluations);
+                      st.setSelectionReason(result.selection_reason ?? '');
+                      const sel = evaluations.filter((e) => e.selected).sort((a, b) => a.rank - b.rank);
+                      st.setSelectedTopics(sel);
                     } else if (step === 'direction') {
                       const result = parsed as DirectionResult;
                       st.setDirection(result);

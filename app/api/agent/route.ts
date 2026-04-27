@@ -8,7 +8,6 @@ import {
   getFreeformPrompt,
   getEvaluatePrompt,
 } from '@/lib/prompts';
-import { extractJson } from '@/lib/utils';
 
 // ──────────────────────────────────────────────
 // Types
@@ -71,58 +70,11 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  // 3a. evaluate 스텝: 스트리밍 없이 단순 JSON 응답
-  if (step === 'evaluate') {
-    const evalTopics = topics ?? [];
-    const evalCategories = categories ?? settings?.categories ?? [];
-
-    if (evalTopics.length === 0) {
-      return new Response(JSON.stringify({ error: 'topics 배열이 필요합니다.' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    }
-
-    const client = new Anthropic({ apiKey });
-    try {
-      const response = await client.messages.create({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 1500,
-        system: getEvaluatePrompt(evalTopics, evalCategories),
-        messages: [{ role: 'user', content: '위 5개 주제를 평가해주세요.' }],
-      });
-
-      const rawText = response.content
-        .filter((b) => b.type === 'text')
-        .map((b) => (b as { type: 'text'; text: string }).text)
-        .join('');
-
-      let parsed: { evaluations: unknown[]; selection_reason: string };
-      try {
-        parsed = JSON.parse(extractJson(rawText));
-      } catch {
-        return new Response(JSON.stringify({ error: '모델 응답을 JSON으로 파싱할 수 없습니다.', raw: rawText }), {
-          status: 502,
-          headers: { 'Content-Type': 'application/json' },
-        });
-      }
-
-      return new Response(JSON.stringify(parsed), {
-        headers: { 'Content-Type': 'application/json' },
-      });
-    } catch (err: unknown) {
-      const message = parseAnthropicError(err instanceof Error ? err : new Error(String(err)));
-      return new Response(JSON.stringify({ error: message }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    }
-  }
-
   // 3. 시스템 프롬프트 선택
   const systemPrompt: string = (() => {
     switch (step) {
       case 'topic':     return getTopicPrompt(settings);
+      case 'evaluate':  return getEvaluatePrompt(topics ?? [], categories ?? settings?.categories ?? []);
       case 'direction': return getDirectionPrompt(settings);
       case 'draft':     return getDraftPrompt(settings);
       case 'freeform':  return getFreeformPrompt();
