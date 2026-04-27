@@ -125,6 +125,7 @@ export default function Home() {
       setPipelineSteps((p) => ({ ...p, topic: 'done', evaluate: 'running' }));
 
       // ── Step 2: SEO 평가 ───────────────────────────
+      useAgentStore.getState().clearApiHistory(); // topic 대화 기록 제거 — evaluate는 독립 컨텍스트
       useAgentStore.getState().setIsEvaluating(true);
 
       let selected: TopicEvaluation[] = [];
