@@ -80,7 +80,7 @@ export async function POST(req: NextRequest) {
 
   const client = new Anthropic({ apiKey });
 
-  // ── 3a. evaluate / imagePrompts: 비스트리밍 내부 호출 → SSE 래핑 ─────
+  // ── 3a. evaluate / imagePrompts: 실시간 스트리밍 (비스트리밍은 Vercel 504 유발) ─────
   if (step === 'evaluate' || step === 'imagePrompts') {
     const tokenMap: Record<string, number> = { evaluate: 3000, imagePrompts: 1000 };
     const maxTokens = tokenMap[step];
@@ -93,21 +93,32 @@ export async function POST(req: NextRequest) {
     const stream = new ReadableStream({
       async start(controller) {
         try {
-          const response = await client.messages.create({
+          const streamResponse = client.messages.stream({
             model: 'claude-sonnet-4-6',
             max_tokens: maxTokens,
             system: systemPrompt,
             messages: [{ role: 'user', content: userMessage }],
           });
 
-          const text = response.content
-            .filter((b) => b.type === 'text')
-            .map((b) => (b as { type: 'text'; text: string }).text)
-            .join('');
+          streamResponse.on('text', (textDelta) => {
+            try {
+              controller.enqueue(encode({ type: 'delta', text: textDelta }));
+            } catch { /* already closed */ }
+          });
 
-          controller.enqueue(encode({ type: 'delta', text }));
-          controller.enqueue(encode({ type: 'done', step }));
-          controller.close();
+          streamResponse.on('error', (err: Error) => {
+            const message = parseAnthropicError(err);
+            try {
+              controller.enqueue(encode({ type: 'error', message }));
+              controller.close();
+            } catch { /* already closed */ }
+          });
+
+          await streamResponse.finalMessage();
+          try {
+            controller.enqueue(encode({ type: 'done', step }));
+            controller.close();
+          } catch { /* already closed */ }
         } catch (err: unknown) {
           const message = parseAnthropicError(err instanceof Error ? err : new Error(String(err)));
           try {
