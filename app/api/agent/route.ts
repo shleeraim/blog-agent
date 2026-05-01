@@ -139,15 +139,15 @@ export async function POST(req: NextRequest) {
     }
   })();
 
-  // web_search 도구: topic / draft step에만 포함
-  const useWebSearch = settings.useSearch && (step === 'topic' || step === 'draft');
+  // web_search 도구: topic step에만 포함 (draft에서 실제 검색 실행 시 스트림 타임아웃 발생)
+  const useWebSearch = settings.useSearch && step === 'topic';
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const tools: any[] = useWebSearch ? [{ type: 'web_search_20250305', name: 'web_search' }] : [];
 
   const stream = new ReadableStream({
     async start(controller) {
       try {
-        const tokenMap: Record<string, number> = { topic: 3000, direction: 4000, draft: 16000, freeform: 4000 };
+        const tokenMap: Record<string, number> = { topic: 3000, direction: 4000, draft: 8192, freeform: 4000 };
         const maxTokens = tokenMap[step] ?? 4000;
 
         const requestParams: Parameters<typeof client.messages.stream>[0] = {
