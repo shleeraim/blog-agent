@@ -7,52 +7,34 @@ import { useChat } from '@/hooks/useChat';
 import { MessageList } from '@/components/chat/MessageList';
 import { ChatInput } from '@/components/chat/ChatInput';
 import { StepBar } from '@/components/StepBar';
-import { PipelineStatus, type PipelineSteps } from '@/components/PipelineStatus';
+import { PipelineStatus, type PipelineStep } from '@/components/PipelineStatus';
 import { DualDraftBox } from '@/components/DualDraftBox';
+import { DraftBox } from '@/components/DraftBox';
 import { useAgentStore } from '@/lib/store';
-import type { Step, TopicEvaluation } from '@/lib/types';
+import type { Step } from '@/lib/types';
+
+// ── 파이프라인 초기 상태 ────────────────────────────
+const INITIAL_PIPELINE_STEPS: PipelineStep[] = [
+  { id: 'topic',        label: '🔍 주제 탐색',          status: 'waiting' },
+  { id: 'evaluate',     label: '📊 SEO 자동 평가',       status: 'waiting' },
+  { id: 'select',       label: '🏆 최적 주제 선택',       status: 'waiting' },
+  { id: 'draft',        label: '✍️ 초안 작성',           status: 'waiting' },
+  { id: 'imagePrompts', label: '🎨 이미지 프롬프트 생성', status: 'waiting' },
+  { id: 'images',       label: '🖼️ 이미지 생성',        status: 'waiting' },
+];
 
 const WELCOME_AUTO =
-  '안녕하세요! 재테크 블로그 에이전트입니다.\n🚀 자동 완성 모드가 켜져 있습니다. 주제를 입력하면 탐색 → SEO 평가 → 2개 초안까지 자동으로 완성합니다.';
+  '안녕하세요! 재테크 블로그 에이전트입니다.\n🚀 자동 완성 모드가 켜져 있습니다. 주제를 입력하면 탐색 → SEO 평가 → 초안 → 이미지까지 자동으로 완성합니다.';
 const WELCOME_MANUAL =
   '안녕하세요! 재테크 블로그 에이전트입니다.\n🔧 수동 모드입니다. 주제 탐색만 하거나 원하는 주제를 직접 입력해 주세요.';
 
 const AUTO_PLACEHOLDER = '어떤 주제로 작성할까요? (예: ETF 투자, 부동산 절세, ISA 활용법...)';
 
-const INITIAL_PIPELINE: PipelineSteps = {
-  topic: 'idle', evaluate: 'idle',
-  draft1: 'idle', notes1: 'idle',
-  draft2: 'idle', notes2: 'idle',
-};
-
-// ── Apple Notes 자동 저장 헬퍼 ──────────────────
-async function autoSaveNotes(
-  draft: import('@/lib/types').DraftResult,
-  topicEval: TopicEvaluation | undefined
-): Promise<boolean> {
-  try {
-    const res = await fetch('/api/notes', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        draft,
-        seoScore: topicEval?.seo_score ?? 0,
-        searchVolume: topicEval?.search_volume ?? 0,
-      }),
-    });
-    const data = await res.json();
-    return data.success === true;
-  } catch {
-    return false;
-  }
-}
-
 // ──────────────────────────────────────────────
 export default function Home() {
   const [streamingText, setStreamingText] = useState('');
-  const [pipelineSteps, setPipelineSteps] = useState<PipelineSteps>(INITIAL_PIPELINE);
-  const [selectedTitles, setSelectedTitles] = useState<[string, string] | null>(null);
-  const [stepMessages, setStepMessages] = useState<Partial<Record<keyof PipelineSteps, string>>>({});
+  const [pipelineSteps, setPipelineSteps] = useState<PipelineStep[]>(INITIAL_PIPELINE_STEPS);
+  const [imageError, setImageError] = useState<string | null>(null);
 
   const {
     currentStep,
@@ -62,6 +44,9 @@ export default function Home() {
     drafts,
     selectedTopics,
     autoMode,
+    generatedImages,
+    imagePrompts,
+    isGeneratingImages,
     reset,
     setStep,
     removeDraft,
@@ -92,137 +77,96 @@ export default function Home() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages.length]);
 
-  // autoMode 변경 시 환영 메시지 업데이트
+  // autoMode 변경 시 환영 메시지 교체
   useEffect(() => {
     const state = useAgentStore.getState();
     if (state.messages.length === 1 && state.messages[0]?.role === 'agent') {
-      // 환영 메시지만 있을 때만 교체
       state.clearMessages();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoMode]);
 
   // ──────────────────────────────────────────────
-  // 자동 파이프라인
+  // 6단계 자동 파이프라인
   // ──────────────────────────────────────────────
 
   const runAutoPipeline = useCallback(async (userMessage: string) => {
+    const updateStep = (id: string, status: PipelineStep['status'], detail?: string) => {
+      setPipelineSteps((prev) =>
+        prev.map((s) => (s.id === id ? { ...s, status, detail } : s))
+      );
+    };
+
     const store = useAgentStore.getState();
     store.setIsPipelineRunning(true);
-    setPipelineSteps({ topic: 'running', evaluate: 'idle', draft1: 'idle', notes1: 'idle', draft2: 'idle', notes2: 'idle' });
-    setSelectedTitles(null);
-    setStepMessages({});
+    store.clearDrafts();
+    store.setDraft(null);
+    store.setImagePrompts([]);
+    store.setGeneratedImages([]);
+    setPipelineSteps(INITIAL_PIPELINE_STEPS);
 
     try {
       // ── Step 1: 주제 탐색 ──────────────────────────
+      updateStep('topic', 'running');
       await sendMessageRef.current(userMessage, 'topic', { noStepAdvance: true });
 
       const { topics, settings } = useAgentStore.getState();
       if (topics.length === 0) {
         toast.error('주제 탐색에 실패했습니다. 다시 시도해 주세요.');
+        updateStep('topic', 'error', '주제 탐색 실패');
         return;
       }
-      setPipelineSteps((p) => ({ ...p, topic: 'done', evaluate: 'running' }));
+      updateStep('topic', 'done', '5개 주제 탐색 완료');
 
       // ── Step 2: SEO 평가 ───────────────────────────
-      useAgentStore.getState().clearApiHistory(); // topic 대화 기록 제거 — evaluate는 독립 컨텍스트
+      updateStep('evaluate', 'running');
+      useAgentStore.getState().clearApiHistory();
       useAgentStore.getState().setIsEvaluating(true);
 
-      let selected: TopicEvaluation[] = [];
       let evalSuccess = false;
-
       try {
         await sendMessageRef.current('위 5개 주제를 평가해주세요.', 'evaluate', {
           noStepAdvance: true,
           silent: true,
-          extraPayload: {
-            topics: topics.map((t) => t.title),
-            categories: settings.categories,
-          },
+          extraPayload: { topics: topics.map((t) => t.title) },
         });
-        selected = useAgentStore.getState().selectedTopics;
-        evalSuccess = selected.length >= 2;
+        evalSuccess = useAgentStore.getState().evaluations.length > 0;
       } catch {
         evalSuccess = false;
       } finally {
         useAgentStore.getState().setIsEvaluating(false);
       }
 
-      // ① 평가 실패 → 수동 선택 모드 전환
       if (!evalSuccess) {
-        useAgentStore.getState().setEvaluations([]); // 점수 바 숨기고 카드 클릭 활성화
-        toast.error('SEO 평가에 실패했습니다. 수동으로 주제를 선택해주세요.', { duration: 5000 });
-        setPipelineSteps((p) => ({ ...p, evaluate: 'failed' }));
+        useAgentStore.getState().setEvaluations([]);
+        toast.error('SEO 평가 실패 — 수동 선택 모드로 전환합니다', { duration: 5000 });
+        updateStep('evaluate', 'error', 'SEO 평가 실패');
         useAgentStore.getState().addMessage({
           role: 'agent',
           content: '📋 수동 선택 모드 — 위 주제 카드를 직접 클릭하여 원하는 주제를 선택해주세요.',
           type: 'text',
         });
-        return; // outer finally에서 isPipelineRunning(false) 처리
+        return;
       }
+      updateStep('evaluate', 'done', 'SEO 평가 완료');
 
-      const titles: [string, string] = [selected[0].title, selected[1].title];
-      setSelectedTitles(titles);
-      setPipelineSteps((p) => ({ ...p, evaluate: 'done', draft1: 'running' }));
+      // ── Step 3: 최적 주제 선택 ────────────────────
+      updateStep('select', 'running');
+      const evaluations = useAgentStore.getState().evaluations;
+      const selected = evaluations.find((e) => e.selected) ?? evaluations[0];
+      useAgentStore.getState().setSelectedTopic(selected);
+      updateStep('select', 'done', `"${selected.title}" 선택됨`);
 
       // 3초 대기 — 사용자가 평가 결과 확인
       await new Promise((resolve) => setTimeout(resolve, 3000));
 
-      // ── Step 3: 1번 초안 ───────────────────────────
-      const storeTopics = useAgentStore.getState().topics;
-      const topicObj1 = storeTopics.find((t) => t.title === titles[0]) ?? storeTopics[0];
-      useAgentStore.getState().setSelectedTopic(topicObj1);
-      useAgentStore.getState().clearApiHistory();
-      useAgentStore.getState().setDraft(null); // 이전 draft 초기화
-
-      await sendMessageRef.current(
-        `주제 "${titles[0]}"로 블로그 방향성을 설정해주세요.`,
-        'direction', { noStepAdvance: true }
-      );
-      await sendMessageRef.current(
-        '이 방향으로 블로그 초안을 작성해주세요.',
-        'draft', { noStepAdvance: true }
-      );
-
-      const draft1 = useAgentStore.getState().draft;
-
-      // ② 1번 초안 실패 → 2번으로 진행
-      if (!draft1) {
-        setPipelineSteps((p) => ({ ...p, draft1: 'failed', draft2: 'running' }));
-        setStepMessages((prev) => ({
-          ...prev,
-          draft1: '⚠️ 1번 초안 생성 실패 — 2번으로 진행',
-        }));
-      } else {
-        useAgentStore.getState().addDraft(draft1);
-        setPipelineSteps((p) => ({ ...p, draft1: 'done', notes1: 'running' }));
-
-        // Apple Notes 자동 저장 (1번)
-        const topic1Eval = useAgentStore.getState().selectedTopics[0];
-        const notes1Ok = await autoSaveNotes(draft1, topic1Eval);
-
-        // ③ Notes 저장 실패 → 파이프라인 계속, 경고 표시
-        if (notes1Ok) {
-          setPipelineSteps((p) => ({ ...p, notes1: 'done' }));
-        } else {
-          setPipelineSteps((p) => ({ ...p, notes1: 'failed' }));
-          setStepMessages((prev) => ({
-            ...prev,
-            notes1: '⚠️ Apple Notes 저장 실패 (수동 저장 버튼으로 재시도 가능)',
-          }));
-        }
-      }
-
-      // ── Step 4: 2번 초안 ───────────────────────────
-      setPipelineSteps((p) => ({ ...p, draft2: 'running' }));
-
-      const topicObj2 = storeTopics.find((t) => t.title === titles[1]) ?? storeTopics[1];
-      useAgentStore.getState().setSelectedTopic(topicObj2);
+      // ── Step 4: 초안 작성 ─────────────────────────
+      updateStep('draft', 'running');
       useAgentStore.getState().clearApiHistory();
       useAgentStore.getState().setDraft(null);
 
       await sendMessageRef.current(
-        `주제 "${titles[1]}"로 블로그 방향성을 설정해주세요.`,
+        `주제 "${selected.title}"로 블로그 방향성을 설정해주세요.`,
         'direction', { noStepAdvance: true }
       );
       await sendMessageRef.current(
@@ -230,35 +174,78 @@ export default function Home() {
         'draft', { noStepAdvance: true }
       );
 
-      const draft2 = useAgentStore.getState().draft;
+      const draft = useAgentStore.getState().draft;
+      if (!draft) {
+        updateStep('draft', 'error', '초안 생성 실패');
+        toast.error('초안 생성에 실패했습니다.', { duration: 5000 });
+        return;
+      }
+      useAgentStore.getState().addDraft(draft);
+      updateStep('draft', 'done', `${draft.word_count}자 초안 완성`);
 
-      if (!draft2) {
-        setPipelineSteps((p) => ({ ...p, draft2: 'failed' }));
-        setStepMessages((prev) => ({ ...prev, draft2: '⚠️ 2번 초안 생성 실패' }));
-      } else {
-        useAgentStore.getState().addDraft(draft2);
-        setPipelineSteps((p) => ({ ...p, draft2: 'done', notes2: 'running' }));
+      // ── Step 5: 이미지 프롬프트 생성 ──────────────
+      updateStep('imagePrompts', 'running');
+      useAgentStore.getState().clearApiHistory();
 
-        const topic2Eval = useAgentStore.getState().selectedTopics[1];
-        const notes2Ok = await autoSaveNotes(draft2, topic2Eval);
-
-        if (notes2Ok) {
-          setPipelineSteps((p) => ({ ...p, notes2: 'done' }));
-        } else {
-          setPipelineSteps((p) => ({ ...p, notes2: 'failed' }));
-          setStepMessages((prev) => ({
-            ...prev,
-            notes2: '⚠️ Apple Notes 저장 실패 (수동 저장 버튼으로 재시도 가능)',
-          }));
+      let imagePromptsOk = false;
+      try {
+        await sendMessageRef.current('이미지 프롬프트를 생성해주세요.', 'imagePrompts', {
+          noStepAdvance: true,
+          silent: true,
+          extraPayload: {
+            content: draft.content,
+            metaTitle: draft.meta_title,
+            category: settings.categories[0] ?? '재테크',
+          },
+        });
+        const imagePrompts = useAgentStore.getState().imagePrompts;
+        imagePromptsOk = imagePrompts.length > 0;
+        if (imagePromptsOk) {
+          const contentCount = imagePrompts.filter((p) => p.type === 'content').length;
+          updateStep('imagePrompts', 'done', `썸네일 1장 + 본문용 ${contentCount}장 프롬프트 생성`);
         }
+      } catch {
+        imagePromptsOk = false;
       }
 
+      if (!imagePromptsOk) {
+        updateStep('imagePrompts', 'error', '이미지 프롬프트 생성 실패');
+        updateStep('images', 'error', '이미지 생성 건너뜀');
+        useAgentStore.getState().setStep(4);
+        toast.success('초안이 완성되었습니다! (이미지 생성 건너뜀)', { duration: 4000 });
+        return;
+      }
+
+      // ── Step 6: 이미지 생성 ───────────────────────
+      updateStep('images', 'running');
+      useAgentStore.getState().setGeneratingImages(true);
+
+      try {
+        const imagePrompts = useAgentStore.getState().imagePrompts;
+        const res = await fetch('/api/images', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ imagePrompts }),
+        });
+        const data = await res.json();
+        const images = data.images ?? [];
+        useAgentStore.getState().setGeneratedImages(images);
+
+        if (images.length > 0) {
+          updateStep('images', 'done', `이미지 ${images.length}장 생성 완료`);
+        } else {
+          updateStep('images', 'error', '이미지 생성 실패 — 텍스트만 저장됨');
+        }
+      } catch {
+        updateStep('images', 'error', '이미지 생성 실패 — 텍스트만 저장됨');
+        toast.error('이미지 생성에 실패했습니다. 초안은 정상 완성되었습니다.', { duration: 4000 });
+      } finally {
+        useAgentStore.getState().setGeneratingImages(false);
+      }
+
+      // 완료 (이미지 실패해도 진행)
       useAgentStore.getState().setStep(4);
-
-      const doneDrafts = useAgentStore.getState().drafts;
-      if (doneDrafts.length >= 1) {
-        toast.success(`${doneDrafts.length}개 초안이 완성되었습니다! 🎉`, { duration: 4000 });
-      }
+      toast.success('초안과 이미지가 완성되었습니다! 🎉', { duration: 4000 });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : '파이프라인 실행 중 오류가 발생했습니다.';
       toast.error(msg, { duration: 5000 });
@@ -279,13 +266,11 @@ export default function Home() {
       state.drafts.length === 0 &&
       state.topics.length === 0;
 
-    // 자동 모드 + 새 세션: 파이프라인 실행
     if (state.autoMode && isFreshSession) {
       await runAutoPipeline(text);
       return;
     }
 
-    // 수동 모드 또는 진행 중인 세션: 단계별 라우팅
     let step: Step;
     if (state.currentStep === 1) step = 'topic';
     else if (state.currentStep === 2) step = 'direction';
@@ -294,6 +279,106 @@ export default function Home() {
 
     await sendMessage(text, step);
   }, [sendMessage, runAutoPipeline]);
+
+  // ──────────────────────────────────────────────
+  // 이미지 재생성 / 수동 이미지 생성
+  // ──────────────────────────────────────────────
+
+  const handleRegenerateImage = useCallback(async (promptIndex: number) => {
+    const prompts = useAgentStore.getState().imagePrompts;
+    const prompt = prompts[promptIndex];
+    if (!prompt) return;
+
+    useAgentStore.getState().setGeneratingImages(true);
+    try {
+      const res = await fetch('/api/images', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imagePrompts: [prompt] }),
+      });
+      const data = await res.json();
+
+      if (res.status === 400 && data.error?.includes('GEMINI_API_KEY')) {
+        setImageError('GEMINI API 키가 설정되지 않았습니다. .env.local에 GEMINI_API_KEY를 추가해주세요.');
+        return;
+      }
+
+      const [newImage] = data.images ?? [];
+      if (!newImage) {
+        toast.error('이미지 재생성에 실패했습니다. 다시 시도해주세요.', { duration: 4000 });
+        return;
+      }
+
+      const prev = useAgentStore.getState().generatedImages;
+      const idx = prev.findIndex(
+        (img) => img.type === newImage.type && img.insertAfterSection === newImage.insertAfterSection
+      );
+      const updated = [...prev];
+      if (idx >= 0) {
+        updated[idx] = newImage;
+      } else {
+        updated.push(newImage);
+      }
+      useAgentStore.getState().setGeneratedImages(updated);
+      toast.success('이미지가 재생성되었습니다! ✨', { duration: 2000 });
+    } catch {
+      toast.error('이미지 재생성에 실패했습니다. 다시 시도해주세요.', { duration: 4000 });
+    } finally {
+      useAgentStore.getState().setGeneratingImages(false);
+    }
+  }, []);
+
+  const handleGenerateImages = useCallback(async () => {
+    const state = useAgentStore.getState();
+    const draft = state.drafts[0];
+    if (!draft) return;
+
+    setImageError(null);
+    useAgentStore.getState().setGeneratingImages(true);
+    try {
+      state.clearApiHistory();
+      await sendMessageRef.current('이미지 프롬프트를 생성해주세요.', 'imagePrompts', {
+        noStepAdvance: true,
+        silent: true,
+        extraPayload: {
+          content: draft.content,
+          metaTitle: draft.meta_title,
+          category: state.settings.categories[0] ?? '재테크',
+        },
+      });
+
+      const prompts = useAgentStore.getState().imagePrompts;
+      if (prompts.length === 0) {
+        toast.error('이미지 프롬프트 생성에 실패했습니다.', { duration: 4000 });
+        return;
+      }
+
+      const res = await fetch('/api/images', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imagePrompts: prompts }),
+      });
+      const data = await res.json();
+
+      if (res.status === 400 && data.error?.includes('GEMINI_API_KEY')) {
+        setImageError('GEMINI API 키가 설정되지 않았습니다. .env.local에 GEMINI_API_KEY를 추가해주세요.');
+        return;
+      }
+
+      const images = data.images ?? [];
+      useAgentStore.getState().setGeneratedImages(images);
+
+      if (images.length > 0) {
+        toast.success(`이미지 ${images.length}장이 생성되었습니다! 🎉`, { duration: 3000 });
+      } else {
+        toast.error('이미지 생성에 실패했습니다.', { duration: 4000 });
+      }
+    } catch {
+      toast.error('이미지 생성 중 오류가 발생했습니다.', { duration: 4000 });
+    } finally {
+      useAgentStore.getState().setGeneratingImages(false);
+    }
+  }, []);
 
   // ──────────────────────────────────────────────
   // DualDraftBox 핸들러
@@ -312,9 +397,8 @@ export default function Home() {
 
   const handleReset = useCallback(() => {
     clearDrafts();
-    setPipelineSteps(INITIAL_PIPELINE);
-    setSelectedTitles(null);
-    setStepMessages({});
+    setPipelineSteps(INITIAL_PIPELINE_STEPS);
+    setImageError(null);
     reset();
   }, [clearDrafts, reset]);
 
@@ -338,59 +422,62 @@ export default function Home() {
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
         <StepBar currentStep={currentStep} />
 
-        {/* drafts >= 1 → DualDraftBox / 그 외 → 채팅 */}
         {drafts.length >= 1 ? (
-          <DualDraftBox
-            drafts={drafts}
-            selectedTopics={selectedTopics}
-            streamingText={drafts.length < 2 ? streamingText : undefined}
-            onCopyAll={handleCopyAll}
-            onCopyOne={handleCopyOne}
-            onRewrite={handleRewrite}
-            onReset={handleReset}
-            onSaveToNotes={handleSaveToNotes}
-          />
+          imagePrompts.length > 0 || isGeneratingImages ? (
+            // 자동 파이프라인 결과: 이미지 포함 DraftBox
+            <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px' }}>
+              <DraftBox
+                draft={drafts[0]}
+                generatedImages={generatedImages}
+                isGeneratingImages={isGeneratingImages}
+                imagePrompts={imagePrompts}
+                imageError={imageError ?? undefined}
+                onCopy={() => {}}
+                onRevise={() => handleRewrite(0)}
+                onReset={handleReset}
+                onSaveToNotes={() => {}}
+                onRegenerateImage={handleRegenerateImage}
+                onGenerateImages={handleGenerateImages}
+              />
+            </div>
+          ) : (
+            // 수동 모드 또는 이미지 없는 결과: 기존 DualDraftBox
+            <DualDraftBox
+              drafts={drafts}
+              selectedTopics={selectedTopics}
+              streamingText={drafts.length < 2 ? streamingText : undefined}
+              onCopyAll={handleCopyAll}
+              onCopyOne={handleCopyOne}
+              onRewrite={handleRewrite}
+              onReset={handleReset}
+              onSaveToNotes={handleSaveToNotes}
+            />
+          )
         ) : (
           <MessageList streamingText={streamingText} />
         )}
 
         {/* 파이프라인 진행 상태 */}
-        {isPipelineRunning && (
-          <PipelineStatus
-            steps={pipelineSteps}
-            selectedTitles={selectedTitles}
-            stepMessages={stepMessages}
-          />
-        )}
+        <PipelineStatus steps={pipelineSteps} />
 
         {/* 빠른 시작 버튼 */}
         {showWelcomeActions && (
-          <div style={{ flexShrink: 0, padding: '0 16px 10px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-            {autoMode ? (
-              // 자동 모드: 입력창 포커스만
-              <QuickButton
-                onClick={() => document.querySelector<HTMLTextAreaElement>('textarea')?.focus()}
-                color="#e6b84a"
-              >
-                ✏️ 주제 입력하기
-              </QuickButton>
-            ) : (
-              // 수동 모드: 탐색 + 직접 입력
-              <>
-                <QuickButton
-                  onClick={() => handleUserSend('요즘 인기 있는 재테크 주제 추천해줘')}
-                  color="#2d7dd2"
-                >
-                  🔍 주제 탐색만
-                </QuickButton>
-                <QuickButton
-                  onClick={() => document.querySelector<HTMLTextAreaElement>('textarea')?.focus()}
-                  color="#484f58"
-                >
-                  ✏️ 직접 입력
-                </QuickButton>
-              </>
-            )}
+          <div style={{
+            flexShrink: 0, padding: '0 16px 10px',
+            display: 'flex', gap: '8px', flexWrap: 'wrap',
+          }}>
+            <QuickButton
+              onClick={() => runAutoPipeline('요즘 인기 있는 재테크 주제 추천해줘')}
+              color="#e6b84a"
+            >
+              🚀 자동 완성
+            </QuickButton>
+            <QuickButton
+              onClick={() => document.querySelector<HTMLTextAreaElement>('textarea')?.focus()}
+              color="#484f58"
+            >
+              ✏️ 직접 입력
+            </QuickButton>
           </div>
         )}
 

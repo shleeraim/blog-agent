@@ -3,7 +3,7 @@
 import { useCallback, useRef } from 'react';
 import { useAgentStore } from '@/lib/store';
 import { extractJson } from '@/lib/utils';
-import type { Step, TopicResult, TopicEvaluation, DirectionResult, DraftResult } from '@/lib/types';
+import type { Step, TopicResult, TopicEvaluation, DirectionResult, DraftResult, ImagePrompt } from '@/lib/types';
 
 interface UseChatOptions {
   onStreamStart?: () => void;
@@ -116,6 +116,9 @@ export function useChat({
                       st.setDraft(result);
                       st.addMessage({ role: 'agent', content: result.meta_title, type: 'draft', data: result });
                       if (!options?.noStepAdvance) st.setStep(4);
+                    } else if (step === 'imagePrompts') {
+                      const result = parsed as { imagePrompts: ImagePrompt[] };
+                      st.setImagePrompts(result.imagePrompts ?? []);
                     }
                     st.addApiHistory('assistant', accumulated);
                   } catch {

@@ -7,6 +7,8 @@ import type {
   DirectionResult,
   DraftResult,
   Settings,
+  ImagePrompt,
+  GeneratedImage,
 } from '@/lib/types';
 
 // ──────────────────────────────────────────────
@@ -27,7 +29,7 @@ const INITIAL_STATE = {
   messages: [] as Message[],
   apiHistory: [] as { role: 'user' | 'assistant'; content: string }[],
   topics: [] as Topic[],
-  selectedTopic: null as Topic | null,
+  selectedTopic: null as TopicEvaluation | null,
   direction: null as DirectionResult | null,
   draft: null as DraftResult | null,
   isLoading: false,
@@ -38,6 +40,9 @@ const INITIAL_STATE = {
   isEvaluating: false,
   isPipelineRunning: false,
   selectionReason: '',
+  imagePrompts: [] as ImagePrompt[],
+  generatedImages: [] as GeneratedImage[],
+  isGeneratingImages: false,
 };
 
 // ──────────────────────────────────────────────
@@ -62,8 +67,8 @@ interface AgentStore {
   // 단계별 데이터
   topics: Topic[];
   setTopics: (t: Topic[]) => void;
-  selectedTopic: Topic | null;
-  setSelectedTopic: (t: Topic | null) => void;
+  selectedTopic: TopicEvaluation | null;
+  setSelectedTopic: (t: TopicEvaluation | null) => void;
   direction: DirectionResult | null;
   setDirection: (d: DirectionResult | null) => void;
   draft: DraftResult | null;
@@ -106,6 +111,14 @@ interface AgentStore {
   // AI 선택 이유 (evaluate 응답)
   selectionReason: string;
   setSelectionReason: (r: string) => void;
+
+  // 이미지 프롬프트 & 생성 결과
+  imagePrompts: ImagePrompt[];
+  setImagePrompts: (p: ImagePrompt[]) => void;
+  generatedImages: GeneratedImage[];
+  setGeneratedImages: (imgs: GeneratedImage[]) => void;
+  isGeneratingImages: boolean;
+  setGeneratingImages: (v: boolean) => void;
 
   // 자동/수동 모드 (persist)
   autoMode: boolean;
@@ -190,6 +203,11 @@ export const useAgentStore = create<AgentStore>()(
       setIsEvaluating: (isEvaluating) => set({ isEvaluating }),
       setIsPipelineRunning: (isPipelineRunning) => set({ isPipelineRunning }),
       setSelectionReason: (selectionReason) => set({ selectionReason }),
+
+      // ── 이미지 프롬프트 & 생성 결과 ──
+      setImagePrompts: (imagePrompts) => set({ imagePrompts }),
+      setGeneratedImages: (generatedImages) => set({ generatedImages }),
+      setGeneratingImages: (isGeneratingImages) => set({ isGeneratingImages }),
 
       // ── 자동/수동 모드 ──
       setAutoMode: (autoMode) => set({ autoMode }),

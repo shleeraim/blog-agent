@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { Topic, TopicResult, TopicEvaluation } from '@/lib/types';
+import { useAgentStore } from '@/lib/store';
 
 const DIFFICULTY_DOT: Record<string, string> = {
   '입문': '🟢',
@@ -13,7 +14,6 @@ interface TopicCardsProps {
   data: TopicResult;
   evaluations: TopicEvaluation[];
   isEvaluating: boolean;
-  selectionReason?: string;
   onSelect: (topic: Topic) => void;
 }
 
@@ -83,20 +83,44 @@ function ScoreBar({ label, score, color }: { label: string; score: number; color
   );
 }
 
-export function TopicCards({
-  data,
-  evaluations,
-  isEvaluating,
-  selectionReason,
-  onSelect,
-}: TopicCardsProps) {
+export function TopicCards({ data, evaluations, isEvaluating, onSelect }: TopicCardsProps) {
   const [selected, setSelected] = useState<number | null>(null);
+  const [countdown, setCountdown] = useState<number | null>(null);
+  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const selectionReason = useAgentStore((s) => s.selectionReason);
+  const isPipelineRunning = useAgentStore((s) => s.isPipelineRunning);
 
   const hasEvaluations = evaluations.length > 0;
   const evalMap = new Map(evaluations.map((e) => [e.title, e]));
 
+  // selectionReason이 새로 세팅되면 카운트다운 시작
+  useEffect(() => {
+    if (!selectionReason || !hasEvaluations) {
+      setCountdown(null);
+      return;
+    }
+
+    setCountdown(3);
+    countdownRef.current = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev === null || prev <= 1) {
+          clearInterval(countdownRef.current!);
+          return null;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => {
+      if (countdownRef.current) clearInterval(countdownRef.current);
+    };
+  // selectionReason이 바뀔 때마다 재실행
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectionReason]);
+
   const handleSelect = (topic: Topic, idx: number) => {
-    if (isEvaluating) return;
+    if (isEvaluating || isPipelineRunning) return;
     setSelected(idx);
     onSelect(topic);
   };
@@ -120,6 +144,7 @@ export function TopicCards({
         const borderColor = isUserSelected || isAutoSelected ? '#e6b84a' : '#30363d';
         const borderWidth = isAutoSelected ? '2px' : '1px';
         const bgColor = isUserSelected || isAutoSelected ? '#e6b84a0d' : '#1c2330';
+        const boxShadow = isAutoSelected ? '0 0 0 2px #e6b84a22' : 'none';
 
         return (
           <div
@@ -130,13 +155,13 @@ export function TopicCards({
               background: bgColor,
               border: `${borderWidth} solid ${borderColor}`,
               borderRadius: '10px',
-              cursor: isEvaluating ? 'not-allowed' : 'pointer',
+              cursor: isEvaluating || isPipelineRunning ? 'not-allowed' : 'pointer',
               transition: 'all 0.18s',
-              boxShadow: isUserSelected ? '0 0 0 1px #e6b84a22' : 'none',
-              opacity: dimmed ? 0.5 : 1,
+              boxShadow,
+              opacity: dimmed ? 0.55 : 1,
             }}
             onMouseEnter={(e) => {
-              if (!isUserSelected && !isAutoSelected && !isEvaluating)
+              if (!isUserSelected && !isAutoSelected && !isEvaluating && !isPipelineRunning)
                 e.currentTarget.style.borderColor = '#e6b84a66';
             }}
             onMouseLeave={(e) => {
@@ -144,16 +169,8 @@ export function TopicCards({
                 e.currentTarget.style.borderColor = '#30363d';
             }}
           >
-            {/* 상단: 번호 + 제목 + 우측 배지 영역 */}
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'flex-start',
-                gap: '10px',
-                marginBottom: '6px',
-              }}
-            >
-              {/* 번호 */}
+            {/* 상단: 번호 + 제목 + 우측 배지 */}
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', marginBottom: '6px' }}>
               <span
                 style={{
                   fontFamily: "'DM Mono', monospace",
@@ -167,7 +184,6 @@ export function TopicCards({
                 {String(topic.num ?? i + 1).padStart(2, '0')}
               </span>
 
-              {/* 제목 */}
               <span
                 style={{
                   fontSize: '14px',
@@ -183,15 +199,7 @@ export function TopicCards({
 
               {/* 우측: 종합점수 + 자동선택 배지 */}
               {ev && (
-                <div
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'flex-end',
-                    gap: '4px',
-                    flexShrink: 0,
-                  }}
-                >
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px', flexShrink: 0 }}>
                   <span
                     style={{
                       fontFamily: "'DM Mono', monospace",
@@ -218,7 +226,7 @@ export function TopicCards({
                         whiteSpace: 'nowrap',
                       }}
                     >
-                      ✅ 자동 선택
+                      🏆 자동 선택
                     </span>
                   )}
                 </div>
@@ -226,14 +234,7 @@ export function TopicCards({
             </div>
 
             {/* 각도/차별점 */}
-            <p
-              style={{
-                fontSize: '12px',
-                color: '#8b949e',
-                lineHeight: 1.65,
-                marginBottom: ev ? '10px' : '10px',
-              }}
-            >
+            <p style={{ fontSize: '12px', color: '#8b949e', lineHeight: 1.65, marginBottom: '10px' }}>
               {topic.angle}
             </p>
 
@@ -246,15 +247,7 @@ export function TopicCards({
             )}
 
             {/* 하단: 키워드 + 난이도 + 조회수 */}
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                flexWrap: 'wrap',
-                gap: '6px',
-              }}
-            >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '6px' }}>
               <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
                 {topic.keywords.map((kw) => (
                   <span
@@ -273,19 +266,10 @@ export function TopicCards({
                   </span>
                 ))}
               </div>
-
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
-                <span style={{ fontSize: '13px' }}>
-                  {DIFFICULTY_DOT[topic.difficulty] ?? '🟡'}
-                </span>
+                <span style={{ fontSize: '13px' }}>{DIFFICULTY_DOT[topic.difficulty] ?? '🟡'}</span>
                 {topic.est_views !== undefined && (
-                  <span
-                    style={{
-                      fontFamily: "'DM Mono', monospace",
-                      fontSize: '10px',
-                      color: '#484f58',
-                    }}
-                  >
+                  <span style={{ fontFamily: "'DM Mono', monospace", fontSize: '10px', color: '#484f58' }}>
                     {topic.est_views}
                   </span>
                 )}
@@ -296,19 +280,14 @@ export function TopicCards({
             {isEvaluating && (
               <div
                 className="animate-pulse"
-                style={{
-                  marginTop: '12px',
-                  height: '8px',
-                  background: '#30363d',
-                  borderRadius: '4px',
-                }}
+                style={{ marginTop: '12px', height: '8px', background: '#30363d', borderRadius: '4px' }}
               />
             )}
           </div>
         );
       })}
 
-      {/* AI 선택 이유 */}
+      {/* AI 선택 이유 + 카운트다운 */}
       {selectionReason && hasEvaluations && (
         <div
           style={{
@@ -322,6 +301,27 @@ export function TopicCards({
           }}
         >
           🤖 AI 선택 이유: {selectionReason}
+
+          {countdown !== null && (
+            <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '11px', color: '#8b949e' }}>
+                3초 후 자동으로 초안 작성을 시작합니다...
+              </span>
+              <span
+                style={{
+                  fontFamily: "'DM Mono', monospace",
+                  fontSize: '18px',
+                  fontWeight: 700,
+                  color: '#e6b84a',
+                  lineHeight: 1,
+                  minWidth: '16px',
+                  textAlign: 'center',
+                }}
+              >
+                {countdown}
+              </span>
+            </div>
+          )}
         </div>
       )}
 

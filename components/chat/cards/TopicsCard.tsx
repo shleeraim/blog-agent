@@ -86,7 +86,16 @@ export function TopicsCard({ data }: { data: TopicResult }) {
 
   const handleSelect = async (topic: Topic) => {
     if (blocked || hasEval) return; // 평가 결과 있으면 자동 모드 — 수동 선택 비활성
-    setSelectedTopic(topic);
+    setSelectedTopic({
+      rank: topic.num,
+      title: topic.title,
+      seo_score: 0,
+      search_volume: 0,
+      combined_score: 0,
+      seo_reason: '',
+      volume_reason: '',
+      selected: true,
+    });
     setStep(2);
     await sendMessage(
       `주제 ${topic.num}번 "${topic.title}"을 선택했습니다. 이 주제로 방향성을 분석해주세요.`,
@@ -105,7 +114,7 @@ export function TopicsCard({ data }: { data: TopicResult }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
         {data.topics.map((topic) => {
           const diffStyle = DIFFICULTY_STYLE[topic.difficulty];
-          const isUserSelected = selectedTopic?.num === topic.num;
+          const isUserSelected = selectedTopic?.title === topic.title;
           const ev = evalMap.get(topic.title);
           const isAutoSelected = ev?.selected ?? false;
           const dimmed = hasEval && !isAutoSelected;

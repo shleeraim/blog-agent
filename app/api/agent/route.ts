@@ -7,19 +7,24 @@ import {
   getDraftPrompt,
   getFreeformPrompt,
   getEvaluatePrompt,
+  getImagePromptsPrompt,
 } from '@/lib/prompts';
 
 // ──────────────────────────────────────────────
 // Types
 // ──────────────────────────────────────────────
 
-type Step = 'topic' | 'evaluate' | 'direction' | 'draft' | 'freeform';
+type Step = 'topic' | 'evaluate' | 'direction' | 'draft' | 'imagePrompts' | 'freeform';
 
 interface RequestBody {
   step: Step;
   userMessage: string;
+  // evaluate 전용
   topics?: string[];
-  categories?: string[];
+  // imagePrompts 전용
+  content?: string;
+  metaTitle?: string;
+  category?: string;
   history: { role: 'user' | 'assistant'; content: string }[];
   settings: Settings;
 }
@@ -45,7 +50,7 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  const { step, userMessage, topics, categories, history, settings } = body;
+  const { step, userMessage, topics, content, metaTitle, category, history, settings } = body;
 
   // 2. 환경 변수 확인
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -70,11 +75,60 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  // 3. 시스템 프롬프트 선택
+  const client = new Anthropic({ apiKey });
+
+  // ── 3a. evaluate / imagePrompts: 비스트리밍 내부 호출 → SSE 래핑 ─────
+  if (step === 'evaluate' || step === 'imagePrompts') {
+    const tokenMap: Record<string, number> = { evaluate: 3000, imagePrompts: 1000 };
+    const maxTokens = tokenMap[step];
+
+    const systemPrompt =
+      step === 'evaluate'
+        ? getEvaluatePrompt(topics ?? [])
+        : getImagePromptsPrompt(content ?? '', metaTitle ?? '', category ?? '재테크');
+
+    const stream = new ReadableStream({
+      async start(controller) {
+        try {
+          const response = await client.messages.create({
+            model: 'claude-sonnet-4-6',
+            max_tokens: maxTokens,
+            system: systemPrompt,
+            messages: [{ role: 'user', content: userMessage }],
+          });
+
+          const text = response.content
+            .filter((b) => b.type === 'text')
+            .map((b) => (b as { type: 'text'; text: string }).text)
+            .join('');
+
+          controller.enqueue(encode({ type: 'delta', text }));
+          controller.enqueue(encode({ type: 'done', step }));
+          controller.close();
+        } catch (err: unknown) {
+          const message = parseAnthropicError(err instanceof Error ? err : new Error(String(err)));
+          try {
+            controller.enqueue(encode({ type: 'error', message }));
+            controller.close();
+          } catch { /* already closed */ }
+        }
+      },
+    });
+
+    return new Response(stream, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache, no-transform',
+        Connection: 'keep-alive',
+        'X-Accel-Buffering': 'no',
+      },
+    });
+  }
+
+  // ── 3b. 나머지 step: 스트리밍 ───────────────────────────────────────
   const systemPrompt: string = (() => {
     switch (step) {
       case 'topic':     return getTopicPrompt(settings);
-      case 'evaluate':  return getEvaluatePrompt(topics ?? [], categories ?? settings?.categories ?? []);
       case 'direction': return getDirectionPrompt(settings);
       case 'draft':     return getDraftPrompt(settings);
       case 'freeform':  return getFreeformPrompt();
@@ -82,23 +136,15 @@ export async function POST(req: NextRequest) {
     }
   })();
 
-  // 4. web_search 도구 조건부 포함
-  const useWebSearch =
-    settings.useSearch && (step === 'topic' || step === 'draft');
-
+  // web_search 도구: topic / draft step에만 포함
+  const useWebSearch = settings.useSearch && (step === 'topic' || step === 'draft');
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const tools: any[] = useWebSearch
-    ? [{ type: 'web_search_20250305', name: 'web_search' }]
-    : [];
+  const tools: any[] = useWebSearch ? [{ type: 'web_search_20250305', name: 'web_search' }] : [];
 
-  // 5. Anthropic 클라이언트 초기화
-  const client = new Anthropic({ apiKey });
-
-  // 6. 스트리밍 응답 생성
   const stream = new ReadableStream({
     async start(controller) {
       try {
-        const tokenMap: Record<string, number> = { topic: 3000, evaluate: 1500, direction: 4000, draft: 8192, freeform: 4000 };
+        const tokenMap: Record<string, number> = { topic: 3000, direction: 4000, draft: 8192, freeform: 4000 };
         const maxTokens = tokenMap[step] ?? 4000;
 
         const requestParams: Parameters<typeof client.messages.stream>[0] = {
@@ -114,55 +160,40 @@ export async function POST(req: NextRequest) {
           ],
         };
 
-        // tools가 있을 때만 추가 (타입 에러 방지)
         if (tools.length > 0) {
           (requestParams as Record<string, unknown>).tools = tools;
         }
 
         const streamResponse = client.messages.stream(requestParams);
 
-        // 텍스트 델타 스트리밍
         streamResponse.on('text', (textDelta) => {
           try {
-            controller.enqueue(
-              encode({ type: 'delta', text: textDelta })
-            );
-          } catch {
-            // controller already closed
-          }
+            controller.enqueue(encode({ type: 'delta', text: textDelta }));
+          } catch { /* controller already closed */ }
         });
 
-        // 최종 메시지 수신 시 완료 이벤트
         streamResponse.on('finalMessage', () => {
           try {
             controller.enqueue(encode({ type: 'done', step }));
             controller.close();
-          } catch {
-            // already closed
-          }
+          } catch { /* already closed */ }
         });
 
-        // 스트림 에러
         streamResponse.on('error', (err: Error) => {
           const message = parseAnthropicError(err);
           try {
             controller.enqueue(encode({ type: 'error', message }));
             controller.close();
-          } catch {
-            // already closed
-          }
+          } catch { /* already closed */ }
         });
 
-        // 스트림이 끝날 때까지 대기
         await streamResponse.finalMessage();
       } catch (err: unknown) {
         const message = parseAnthropicError(err instanceof Error ? err : new Error(String(err)));
         try {
           controller.enqueue(encode({ type: 'error', message }));
           controller.close();
-        } catch {
-          // already closed
-        }
+        } catch { /* already closed */ }
       }
     },
   });
@@ -172,7 +203,7 @@ export async function POST(req: NextRequest) {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache, no-transform',
       Connection: 'keep-alive',
-      'X-Accel-Buffering': 'no', // Nginx 버퍼링 비활성화
+      'X-Accel-Buffering': 'no',
     },
   });
 }

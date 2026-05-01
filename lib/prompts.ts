@@ -51,22 +51,34 @@ export function getTopicPrompt(settings: Settings): string {
 - 마크다운 코드블록(\`\`\`), 설명 텍스트, 앞뒤 공백 없이 순수 JSON만 출력한다.
 - 모든 문자열 값은 한국어로 작성한다.
 
+## 제목 작성 규칙 (SEO 최우선)
+- 사람들이 네이버/구글에서 실제로 검색할 법한 키워드를 제목에 포함할 것
+- 형태: "[핵심 검색 키워드] + [독자에게 주는 가치/혜택]"
+- 반드시 2026년 등 연도를 포함하여 최신성 강조
+- 제목 길이 35~50자 사이로 유지
+- 의문형 또는 수치 포함 권장 (예: "얼마나 받나?", "3가지 방법")
+- 뉴스 헤드라인 스타일 절대 금지
+  - 나쁜 예: "HBM 수출 폭증, 삼성·하이닉스 투자전략"
+  - 좋은 예: "삼성전자 SK하이닉스 차이와 지금 사야 할 종목 (2026년 투자자 분석)"
+  - 나쁜 예: "2026 ISA 완전 개편 총정리"
+  - 좋은 예: "ISA 계좌 한도 4000만원으로 늘었다 — 2026년 달라진 점과 절세 활용법"
+
 ## JSON 스키마
 {
   "intro": "string (주제 추천 이유를 1~2문장으로)",
   "topics": [
     {
       "num": 1,
-      "title": "string (블로그 제목 후보, 30자 이내)",
+      "title": "string (SEO 블로그 제목, 35~50자, '[핵심 검색 키워드] + [독자 혜택]' 형태, 2026년 연도 포함, 의문형/수치 권장)",
       "angle": "string (이 주제를 어떤 관점으로 다룰지, 1문장)",
       "keywords": ["string", "string", "string"],
       "difficulty": "입문 | 중급 | 고급",
       "est_views": "string (예상 월 검색량 또는 관심도, 예: '월 1만+' / '높음')"
     }
-    // ... 총 5개
   ],
   "tip": "string (주제 선택 시 추가 팁, 1~2문장)"
-}`;
+}
+(topics 배열에 반드시 5개 항목을 포함하라)`;
 }
 
 // ──────────────────────────────────────────────
@@ -123,7 +135,7 @@ export function getDraftPrompt(settings: Settings): string {
   }[settings.length];
 
   const seoClause = settings.useSeo
-    ? '\n- SEO: 핵심 키워드를 제목, 첫 번째 소제목, 첫 단락에 자연스럽게 포함하라. meta_title은 30자 이내, meta_desc는 160자 이내로 작성하라.'
+    ? '\n- SEO: 핵심 키워드를 제목, 첫 번째 소제목, 첫 단락에 자연스럽게 포함하라. meta_desc는 160자 이내로 작성하라.'
     : '';
 
   const formatClause = settings.useFormat
@@ -150,11 +162,56 @@ export function getDraftPrompt(settings: Settings): string {
 - 목표 글 길이: ${lengthInstruction}
 - 독자 수준: ${levelLabel(settings.level)}${seoClause}${formatClause}${searchClause}
 
+## ★ 제목(meta_title) 작성 규칙 (SEO 최우선)
+- 반드시 사람들이 네이버/구글에서 실제로 검색할 법한 키워드를 포함할 것
+- 형태: "[핵심 검색 키워드] + [독자에게 주는 가치/혜택]"
+- 반드시 2026년 등 연도를 포함하여 최신성 강조
+- 35~50자 사이로 유지 (30자 이하 또는 51자 이상 금지)
+- 의문형 또는 수치 포함 권장
+- 뉴스 헤드라인 스타일 절대 금지
+  - 나쁜 예: "HBM 수출 폭증, 삼성·하이닉스 투자전략"
+  - 좋은 예: "삼성전자 SK하이닉스 차이와 지금 사야 할 종목 (2026년 투자자 분석)"
+  - 나쁜 예: "2026 ISA 완전 개편 총정리"
+  - 좋은 예: "ISA 계좌 한도 4000만원으로 늘었다 — 2026년 달라진 점과 절세 활용법"
+
+## ★ 태그 작성 규칙
+- # 기호 절대 사용 금지. 순수 텍스트만 입력 (예: ETF투자 O, #ETF투자 X)
+- 5~8개 이내로 제한
+- 반드시 아래 표준 목록에서만 선택하라. 목록에 없는 변형 태그 생성 금지:
+  ETF투자, 배당ETF, 레버리지ETF, 커버드콜ETF, 채권ETF,
+  삼성전자, SK하이닉스, 국내주식, 미국주식, 서학개미,
+  S&P500, 나스닥100, TQQQ, JEPI, SCHD,
+  ISA계좌, IRP계좌, 연금저축, 퇴직연금, 절세전략,
+  재테크, 투자전략, 자산배분, 장기투자, 배당투자,
+  국민연금, 개인재정, 금융기초, 경제뉴스, 시장분석
+
+## ★ 카테고리 지정 규칙
+아래 6개 중 반드시 하나를 지정하라:
+- "ETF 투자": ETF 분석·추천, 배당/레버리지/커버드콜 ETF 관련
+- "국내외 주식": 개별 종목 분석, 삼성전자·하이닉스 등 주식 투자
+- "절세 전략": ISA, IRP, 연금저축, 퇴직연금, 세금 관련
+- "경제 & 시장 분석": 금리, 환율, 수출입, 거시경제, 시장 전망
+- "재테크 기초": 투자 입문, 개념 설명, 금융 상식
+- "개인 재정관리": 가계부, 예산, 부채 관리, 저축 관련
+
+## ★ 본문 SEO 구조 규칙
+1. H2 소제목은 검색 키워드를 포함한 질문형으로 작성할 것
+   - 예: "## ETF가 뭔가요? 왜 요즘 인기일까?" / "## 삼성전자와 SK하이닉스, 어느 쪽을 사야 할까?"
+2. 글 서두 100~150자 안에 핵심 키워드를 자연스럽게 2회 이상 포함할 것
+3. 본문 중간에 내부 링크 placeholder를 최소 2개 삽입할 것:
+   - 형태: "👉 관련글: [키워드가 포함된 자연스러운 링크 텍스트](링크 추가 예정)"
+   - 삽입 위치: 관련 개념이 처음 언급되는 단락 바로 뒤
+4. 글 마지막에 반드시 아래 고정 마무리 섹션을 추가할 것:
+---
+💬 이 글이 도움이 됐다면 구독과 즐겨찾기를 눌러주세요!
+관련 글 보기: [관련글1 제목](링크 추가 예정) | [관련글2 제목](링크 추가 예정)
+---
+
 ## 글 구조 (반드시 준수)
-1. 후킹 도입부 — 독자의 공감 또는 호기심을 자극하는 도입 (2~3문장)
-2. 본문 — 소제목 3~5개로 나눠 핵심 내용 전달
+1. 후킹 도입부 — 독자의 공감 또는 호기심을 자극하는 도입 (핵심 키워드 2회 이상 포함)
+2. 본문 — 질문형 H2 소제목 3~5개로 나눠 핵심 내용 전달 (내부 링크 placeholder 포함)
 3. 핵심 요약 — 글 전체를 3~5개 bullet로 요약
-4. 마무리 CTA — 독자 행동 유도 (댓글, 구독, 관련 글 링크 등)
+4. 마무리 CTA — 고정 마무리 섹션 (위 형식 준수)
 
 ## 응답 규칙
 - 반드시 아래 JSON 스키마만 응답하라.
@@ -163,10 +220,11 @@ export function getDraftPrompt(settings: Settings): string {
 
 ## JSON 스키마
 {
-  "meta_title": "string (SEO 제목, 30자 이내)",
+  "meta_title": "string (SEO 제목, 35~50자, '[핵심 검색 키워드] + [독자 혜택]' 형태, 2026년 연도 포함)",
   "meta_desc": "string (SEO 설명, 160자 이내)",
-  "tags": ["string", "string", "string", "string", "string"],
-  "content": "string (전체 블로그 본문, 마크다운)",
+  "category": "string (ETF 투자 | 국내외 주식 | 절세 전략 | 경제 & 시장 분석 | 재테크 기초 | 개인 재정관리)",
+  "tags": ["string (# 없는 순수 텍스트, 표준 목록에서만 선택)", "...", "...", "...", "..."],
+  "content": "string (전체 블로그 본문, 마크다운, 질문형 H2·내부링크·고정 마무리 섹션 포함)",
   "word_count": 0,
   "seo_tips": ["string", "string"]
 }`;
@@ -176,17 +234,13 @@ export function getDraftPrompt(settings: Settings): string {
 // 4. 주제 평가 프롬프트
 // ──────────────────────────────────────────────
 
-export function getEvaluatePrompt(topics: string[], categories: string[]): string {
+export function getEvaluatePrompt(topics: string[]): string {
   const topicList = topics.map((t, i) => `${i + 1}. ${t}`).join('\n');
-  const categoryLabel = categories.length > 0 ? categories.join(', ') : '재테크 전반';
 
   return `당신은 재테크 블로그 SEO 전문가입니다.
 
 ## 역할
 아래 블로그 주제 5개를 평가하고 종합점수 기준 상위 2개를 선정한다.
-
-## 관심 카테고리
-${categoryLabel}
 
 ## 평가할 주제
 ${topicList}
@@ -194,7 +248,7 @@ ${topicList}
 ## 평가 기준
 - SEO 점수 (0~100):
   - 키워드 검색 의도 명확성 (25점)
-  - 제목 경쟁도 — 낮을수록 높은 점수 (25점)
+  - 경쟁 강도 — 낮을수록 높은 점수 (25점)
   - 롱테일 키워드 포함 가능성 (25점)
   - 계절성/시의성 (25점)
 - 예상 검색량 지수 (0~100):
@@ -204,7 +258,7 @@ ${topicList}
 
 ## 응답 규칙
 - 5개 주제를 모두 평가 후 종합점수 내림차순으로 정렬하라.
-- 상위 2개에 selected: true를 표시하라.
+- 상위 2개에 selected: true를 표시하라. 나머지는 selected: false.
 - 반드시 JSON만 응답하라. 마크다운 코드블록(\`\`\`), 설명 텍스트 없이 순수 JSON만 출력한다.
 
 ## JSON 스키마
@@ -222,6 +276,70 @@ ${topicList}
     }
   ],
   "selection_reason": "상위 2개를 선택한 이유 2~3문장"
+}
+(evaluations 배열에 반드시 5개 항목을 포함하라. JSON 외 주석이나 설명 텍스트 절대 출력 금지)`;
+}
+
+// ──────────────────────────────────────────────
+// 5. 이미지 프롬프트 생성 프롬프트
+// ──────────────────────────────────────────────
+
+export function getImagePromptsPrompt(
+  content: string,
+  metaTitle: string,
+  category: string
+): string {
+  // 본문이 너무 길면 소제목·도입부만 추출하여 토큰 절약
+  const contentPreview = content.length > 3000 ? content.slice(0, 3000) + '\n...(이하 생략)' : content;
+
+  return `당신은 블로그 이미지 기획 전문가입니다. Nano Banana 2 이미지 생성 모델에 전달할 프롬프트를 작성합니다.
+
+## 역할
+아래 블로그 본문을 분석하여 썸네일 1장 + 본문용 이미지 2~3장의 생성 프롬프트를 작성하라.
+
+## 블로그 정보
+- 제목: ${metaTitle}
+- 카테고리: ${category}
+
+## 본문
+${contentPreview}
+
+## 이미지 스타일 가이드
+- 카테고리별 스타일:
+  - ETF/펀드·주식·해외투자: 전문적 금융 이미지 (차트, 글로벌 시장, 모던 오피스)
+  - ISA/연금·절세: 안정감 있는 라이프스타일 (중장년 가정, 미래 계획)
+  - 부동산: 건물·인테리어·도시 전경
+  - 예금/적금: 저축·성장 (동전, 성장 그래프)
+  - 기타: 밝고 현대적인 비즈니스 이미지
+- 공통 스타일 지침:
+  - photorealistic, professional, clean composition, soft lighting
+  - no text, no watermark, no logo
+  - high quality, 4K resolution
+
+## 응답 규칙
+- 본문의 소제목(##)을 파악하여 이미지 삽입 위치를 결정하라.
+- 썸네일(thumbnail)은 insertAfterSection을 반드시 "header"로 설정하라.
+- 반드시 JSON만 응답하라. 마크다운 코드블록, 설명 텍스트 없이 순수 JSON만 출력한다.
+
+## JSON 스키마
+{
+  "imagePrompts": [
+    {
+      "type": "thumbnail",
+      "aspectRatio": "16:9",
+      "prompt": "photorealistic, professional blog thumbnail, {main subject description}, clean background, modern style, high quality, no text, no watermark",
+      "altText": "썸네일 설명 (한국어)",
+      "insertAfterSection": "header"
+    },
+    {
+      "type": "content",
+      "aspectRatio": "1:1",
+      "prompt": "photorealistic, {section content description}, professional, soft lighting, high quality, no text, no watermark",
+      "altText": "본문 이미지 설명 (한국어)",
+      "insertAfterSection": "소제목 텍스트 (## 뒤 내용)"
+    }
+    // ... 총 3~4개
+  ]
 }`;
 }
 

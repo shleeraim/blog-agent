@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx pnpm *)",
+      "Bash(curl -s -X POST http://localhost:3000/api/agent -H 'Content-Type: application/json' -d '{ *)",
+      "Bash(python3 -m json.tool)",
+      "Bash(curl -s -X POST http://localhost:3001/api/agent -H 'Content-Type: application/json' -d '{ *)",
+      "Bash(pkill -f \"next dev\")",
+      "Bash(curl -s http://localhost:3000 -o /dev/null -w \"%{http_code}\")",
+      "Bash(curl -s -X POST http://localhost:3000/api/notes -H 'Content-Type: application/json' -d '{ *)",
+      "Bash(osascript -e ' *)",
+      "Bash(osascript /tmp/test-note.applescript)",
+      "Bash(echo \"exit: $?\")",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\('Notes:', d['method'], '/', d['success']\\)\")",
+      "Bash(git -C /Users/sanghwa/Documents/Tistory/blog-agent status)",
+      "Bash(git -C /Users/sanghwa/Documents/Tistory/blog-agent log --oneline -3)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(curl -s -X POST http://localhost:3000/api/images -H 'Content-Type: application/json' -d '{ *)",
+      "Bash(python3 -c ' *)",
+      "Bash(kill %1)"
+    ],
+    "additionalDirectories": [
+      "/private/tmp"
+    ]
+  }
+}
