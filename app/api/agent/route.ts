@@ -1,5 +1,8 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { NextRequest } from 'next/server';
+
+// Vercel 함수 최대 실행 시간 (Hobby: 최대 60초)
+export const maxDuration = 60;
 import type { Settings } from '@/lib/types';
 import {
   getTopicPrompt,
@@ -144,7 +147,7 @@ export async function POST(req: NextRequest) {
   const stream = new ReadableStream({
     async start(controller) {
       try {
-        const tokenMap: Record<string, number> = { topic: 3000, direction: 4000, draft: 8192, freeform: 4000 };
+        const tokenMap: Record<string, number> = { topic: 3000, direction: 4000, draft: 16000, freeform: 4000 };
         const maxTokens = tokenMap[step] ?? 4000;
 
         const requestParams: Parameters<typeof client.messages.stream>[0] = {
