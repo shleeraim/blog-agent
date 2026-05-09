@@ -2,6 +2,10 @@ import { NextRequest } from 'next/server';
 import { generateImagesForDraft } from '@/lib/image/gemini-image';
 import type { ImagePrompt } from '@/lib/types';
 
+// Edge Runtime: Gemini API calls are I/O-bound, so CPU limit is not hit.
+// Serverless (Hobby) has a 10s wall-clock limit which image generation exceeds.
+export const runtime = 'edge';
+
 export async function POST(req: NextRequest) {
   let body: { imagePrompts: ImagePrompt[] };
   try {
