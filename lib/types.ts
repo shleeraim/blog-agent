@@ -69,15 +69,15 @@ export interface ErrorData {
 export interface ImagePrompt {
   type: 'thumbnail' | 'content';
   aspectRatio: '16:9' | '1:1';
-  prompt: string;                // Nano Banana 2에 전달할 영문 프롬프트
-  altText: string;               // 마크다운 alt 텍스트 (한국어)
-  insertAfterSection: string;    // 삽입 위치 (썸네일은 'header')
+  prompt: string;
+  altText: string;
+  insertAfterSection: string;
 }
 
 export interface GeneratedImage {
   type: 'thumbnail' | 'content';
   aspectRatio: '16:9' | '1:1';
-  url: string;                   // base64 data URL 또는 저장 경로
+  url: string;
   altText: string;
   insertAfterSection: string;
 }

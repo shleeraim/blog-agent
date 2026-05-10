@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenAI } from '@google/genai';
 import type { ImagePrompt, GeneratedImage } from '@/lib/types';
 
 interface ImageGenerateParams {
@@ -26,20 +26,23 @@ export async function generateImage(params: ImageGenerateParams): Promise<ImageG
   const fullPrompt = `${params.prompt}, ${ratioHint}`;
 
   try {
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-3.1-flash-image-preview' });
+    const ai = new GoogleGenAI({ apiKey });
+    const response = await ai.models.generateImages({
+      model: 'imagen-3.0-generate-002',
+      prompt: fullPrompt,
+      config: {
+        numberOfImages: 1,
+        outputMimeType: 'image/jpeg',
+        aspectRatio: params.aspectRatio === '16:9' ? '16:9' : '1:1',
+      },
+    });
 
-    const response = await model.generateContent(fullPrompt);
-
-    const parts = response.response.candidates?.[0]?.content?.parts ?? [];
-    const imagePart = parts.find((p) => 'inlineData' in p && p.inlineData);
-
-    if (!imagePart || !('inlineData' in imagePart) || !imagePart.inlineData) {
+    const base64Image = response.generatedImages?.[0]?.image?.imageBytes;
+    if (!base64Image) {
       return { success: false, error: '이미지 데이터가 응답에 없습니다.' };
     }
 
-    const mimeType = imagePart.inlineData.mimeType || 'image/png';
-    const dataUrl = `data:${mimeType};base64,${imagePart.inlineData.data}`;
+    const dataUrl = `data:image/jpeg;base64,${base64Image}`;
     return { success: true, dataUrl };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
@@ -47,34 +50,27 @@ export async function generateImage(params: ImageGenerateParams): Promise<ImageG
   }
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 export async function generateImagesForDraft(imagePrompts: ImagePrompt[]): Promise<GeneratedImage[]> {
-  const results: GeneratedImage[] = [];
-
-  for (const prompt of imagePrompts) {
-    const result = await generateImage({
-      prompt: prompt.prompt,
-      aspectRatio: prompt.aspectRatio,
-      type: prompt.type,
-    });
-
-    if (result.success && result.dataUrl) {
-      results.push({
-        type: prompt.type,
+  const results = await Promise.all(
+    imagePrompts.map(async (prompt) => {
+      const result = await generateImage({
+        prompt: prompt.prompt,
         aspectRatio: prompt.aspectRatio,
-        url: result.dataUrl,
-        altText: prompt.altText,
-        insertAfterSection: prompt.insertAfterSection,
+        type: prompt.type,
       });
-    }
 
-    if (imagePrompts.indexOf(prompt) < imagePrompts.length - 1) {
-      await sleep(500);
-    }
-  }
+      if (result.success && result.dataUrl) {
+        return {
+          type: prompt.type,
+          aspectRatio: prompt.aspectRatio,
+          url: result.dataUrl,
+          altText: prompt.altText,
+          insertAfterSection: prompt.insertAfterSection,
+        } as GeneratedImage;
+      }
+      return null;
+    })
+  );
 
-  return results;
+  return results.filter((r): r is GeneratedImage => r !== null);
 }
