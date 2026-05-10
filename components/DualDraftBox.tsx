@@ -24,7 +24,6 @@ export interface DualDraftBoxProps {
   onCopyOne: (index: number) => void;
   onRewrite: (index: number) => void;
   onReset: () => void;
-  onSaveToNotes: (index: number) => void;
 }
 
 // ── 마크다운 렌더 스타일 ──────────────────────────
@@ -146,19 +145,14 @@ function DraftPanel({
   index,
   onCopyOne,
   onRewrite,
-  onSaveToNotes,
 }: {
   draft: DraftResult;
   topic?: TopicEvaluation;
   index: number;
   onCopyOne: (i: number) => void;
   onRewrite: (i: number) => void;
-  onSaveToNotes: (i: number) => void;
 }) {
   const [copied, setCopied] = useState(false);
-  const [notesSaved, setNotesSaved] = useState(false);
-  const [notesLoading, setNotesLoading] = useState(false);
-
   const handleCopy = async () => {
     await navigator.clipboard.writeText(draft.content);
     setCopied(true);
@@ -168,48 +162,6 @@ function DraftPanel({
       style: { background: '#161b22', border: '1px solid #56d36455', color: '#56d364' },
     });
     setTimeout(() => setCopied(false), 2000);
-  };
-
-  const handleNotes = async () => {
-    if (notesLoading) return;
-    setNotesLoading(true);
-    try {
-      const res = await fetch('/api/notes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          draft,
-          seoScore: topic?.seo_score ?? 0,
-          searchVolume: topic?.search_volume ?? 0,
-        }),
-      });
-      const data = await res.json();
-
-      if (data.success && data.method === 'applescript') {
-        toast(`✅ Apple Notes에 저장되었습니다! (${data.noteTitle})`, {
-          duration: 4000,
-          style: { background: '#161b22', border: '1px solid #56d36455', color: '#56d364' },
-        });
-        setNotesSaved(true);
-      } else if (data.method === 'clipboard') {
-        // 서버가 클립보드 폴백을 반환 → 클라이언트에서 클립보드 복사
-        const text = `# ${draft.meta_title}\n\n${draft.meta_desc}\n\n---\n\n${draft.content}`;
-        await navigator.clipboard.writeText(text);
-        toast('📋 클립보드에 복사되었습니다. Notes 앱에 붙여넣기 해주세요.', {
-          duration: 4000,
-          style: { background: '#161b22', border: '1px solid #e6b84a55', color: '#e6b84a' },
-        });
-        setNotesSaved(true);
-      } else {
-        toast.error('❌ 저장에 실패했습니다. 수동으로 복사해주세요.');
-      }
-    } catch {
-      toast.error('저장 중 오류가 발생했습니다.');
-    } finally {
-      setNotesLoading(false);
-      onSaveToNotes(index);
-      setTimeout(() => setNotesSaved(false), 3000);
-    }
   };
 
   return (
@@ -321,28 +273,6 @@ function DraftPanel({
         </button>
 
         <button
-          onClick={handleNotes}
-          disabled={notesLoading}
-          style={{
-            ...ghostBtn,
-            flex: '1 1 auto',
-            background: notesSaved ? '#3fb95018' : 'transparent',
-            borderColor: notesSaved ? '#3fb950' : '#30363d',
-            color: notesSaved ? '#3fb950' : notesLoading ? '#484f58' : '#8b949e',
-            cursor: notesLoading ? 'not-allowed' : 'pointer',
-          }}
-          onMouseEnter={(e) => { if (!notesSaved && !notesLoading) { e.currentTarget.style.borderColor = '#e6b84a66'; e.currentTarget.style.color = '#e6b84a'; } }}
-          onMouseLeave={(e) => { if (!notesSaved && !notesLoading) { e.currentTarget.style.borderColor = '#30363d'; e.currentTarget.style.color = '#8b949e'; } }}
-        >
-          {notesLoading ? (
-            <span style={{ display: 'flex', alignItems: 'center', gap: '5px', justifyContent: 'center' }}>
-              <span style={{ width: '10px', height: '10px', border: '1.5px solid #484f58', borderTopColor: '#e6b84a', borderRadius: '50%', animation: 'dual-spin 0.8s linear infinite', display: 'inline-block' }} />
-              저장 중...
-            </span>
-          ) : notesSaved ? '✅ 저장됨!' : '🍎 Apple Notes 저장'}
-        </button>
-
-        <button
           onClick={() => onRewrite(index)}
           style={ghostBtn}
           onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#58a6ff66'; e.currentTarget.style.color = '#58a6ff'; }}
@@ -428,7 +358,6 @@ export function DualDraftBox({
   onCopyOne,
   onRewrite,
   onReset,
-  onSaveToNotes,
 }: DualDraftBoxProps) {
   const [activeTab, setActiveTab] = useState(0);
   const [allCopied, setAllCopied] = useState(false);
@@ -580,7 +509,6 @@ export function DualDraftBox({
               index={0}
               onCopyOne={onCopyOne}
               onRewrite={onRewrite}
-              onSaveToNotes={onSaveToNotes}
             />
           ) : activeTab === 1 && drafts[1] ? (
             <DraftPanel
@@ -589,7 +517,6 @@ export function DualDraftBox({
               index={1}
               onCopyOne={onCopyOne}
               onRewrite={onRewrite}
-              onSaveToNotes={onSaveToNotes}
             />
           ) : activeTab === 1 ? (
             <Draft2Loading streamingText={streamingText} />

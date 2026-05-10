@@ -281,69 +281,6 @@ ${topicList}
 }
 
 // ──────────────────────────────────────────────
-// 5. 이미지 프롬프트 생성 프롬프트
-// ──────────────────────────────────────────────
-
-export function getImagePromptsPrompt(
-  content: string,
-  metaTitle: string,
-  category: string
-): string {
-  // 본문이 너무 길면 소제목·도입부만 추출하여 토큰 절약
-  const contentPreview = content.length > 3000 ? content.slice(0, 3000) + '\n...(이하 생략)' : content;
-
-  return `당신은 블로그 이미지 기획 전문가입니다. Nano Banana 2 이미지 생성 모델에 전달할 프롬프트를 작성합니다.
-
-## 역할
-아래 블로그 본문을 분석하여 썸네일 1장 + 본문용 이미지 2~3장의 생성 프롬프트를 작성하라.
-
-## 블로그 정보
-- 제목: ${metaTitle}
-- 카테고리: ${category}
-
-## 본문
-${contentPreview}
-
-## 이미지 스타일 가이드
-- 카테고리별 스타일:
-  - ETF/펀드·주식·해외투자: 전문적 금융 이미지 (차트, 글로벌 시장, 모던 오피스)
-  - ISA/연금·절세: 안정감 있는 라이프스타일 (중장년 가정, 미래 계획)
-  - 부동산: 건물·인테리어·도시 전경
-  - 예금/적금: 저축·성장 (동전, 성장 그래프)
-  - 기타: 밝고 현대적인 비즈니스 이미지
-- 공통 스타일 지침:
-  - photorealistic, professional, clean composition, soft lighting
-  - no text, no watermark, no logo
-  - high quality, 4K resolution
-
-## 응답 규칙
-- 본문의 소제목(##)을 파악하여 이미지 삽입 위치를 결정하라.
-- 썸네일(thumbnail)은 insertAfterSection을 반드시 "header"로 설정하라.
-- 반드시 JSON만 응답하라. 마크다운 코드블록, 설명 텍스트 없이 순수 JSON만 출력한다.
-
-## JSON 스키마
-{
-  "imagePrompts": [
-    {
-      "type": "thumbnail",
-      "aspectRatio": "16:9",
-      "prompt": "photorealistic, professional blog thumbnail, {main subject description}, clean background, modern style, high quality, no text, no watermark",
-      "altText": "썸네일 설명 (한국어)",
-      "insertAfterSection": "header"
-    },
-    {
-      "type": "content",
-      "aspectRatio": "1:1",
-      "prompt": "photorealistic, {section content description}, professional, soft lighting, high quality, no text, no watermark",
-      "altText": "본문 이미지 설명 (한국어)",
-      "insertAfterSection": "소제목 텍스트 (## 뒤 내용)"
-    }
-    // ... 총 3~4개
-  ]
-}`;
-}
-
-// ──────────────────────────────────────────────
 // 5. 자유 대화 프롬프트
 // ──────────────────────────────────────────────
 

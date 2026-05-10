@@ -2,7 +2,7 @@
 // Blog Agent - Type Definitions
 // ============================================================
 
-export type Step = 'topic' | 'evaluate' | 'direction' | 'draft' | 'imagePrompts' | 'freeform';
+export type Step = 'topic' | 'evaluate' | 'direction' | 'draft' | 'freeform';
 
 export interface TopicEvaluation {
   rank: number;
@@ -66,21 +66,6 @@ export interface ErrorData {
   retryStep: Step;
 }
 
-export interface ImagePrompt {
-  type: 'thumbnail' | 'content';
-  aspectRatio: '16:9' | '1:1';
-  prompt: string;
-  altText: string;
-  insertAfterSection: string;
-}
-
-export interface GeneratedImage {
-  type: 'thumbnail' | 'content';
-  aspectRatio: '16:9' | '1:1';
-  url: string;
-  altText: string;
-  insertAfterSection: string;
-}
 
 export interface Settings {
   categories: string[];

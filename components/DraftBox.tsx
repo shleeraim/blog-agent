@@ -3,267 +3,15 @@
 import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { toast } from 'sonner';
-import type { DraftResult, GeneratedImage, ImagePrompt } from '@/lib/types';
-import { injectImagesIntoContent } from '@/lib/image/inject-images';
+import type { DraftResult } from '@/lib/types';
 
 // ── Types ───────────────────────────────────────
 
 interface DraftBoxProps {
   draft: DraftResult;
-  generatedImages: GeneratedImage[];
-  isGeneratingImages: boolean;
-  imagePrompts?: ImagePrompt[];
-  imageError?: string;
   onCopy: () => void;
   onRevise: () => void;
   onReset: () => void;
-  onSaveToNotes: () => void;
-  onRegenerateImage: (promptIndex: number) => void;
-  onGenerateImages?: () => void;
-}
-
-// ── Failure Placeholder ────────────────────────
-
-function FailurePlaceholder({
-  aspectRatio,
-  onRegenerate,
-}: {
-  aspectRatio: '16:9' | '1:1';
-  onRegenerate: () => void;
-}) {
-  const isWide = aspectRatio === '16:9';
-  return (
-    <div
-      style={{
-        width: isWide ? '100%' : '140px',
-        height: isWide ? undefined : '140px',
-        paddingBottom: isWide ? '56.25%' : undefined,
-        position: 'relative',
-        background: '#21262d',
-        border: '1px solid #d2992233',
-        borderRadius: '8px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        flexShrink: 0,
-      }}
-    >
-      <div
-        style={{
-          position: isWide ? 'absolute' : undefined,
-          inset: isWide ? 0 : undefined,
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: '8px',
-          padding: '12px',
-          textAlign: 'center',
-        }}
-      >
-        <span style={{ fontSize: '18px' }}>⚠️</span>
-        <span style={{ fontSize: '11px', color: '#d29922', lineHeight: 1.4 }}>
-          생성 실패 —<br />재생성 버튼을 눌러주세요
-        </span>
-        <button
-          onClick={onRegenerate}
-          style={{
-            padding: '4px 10px',
-            background: '#d2992222',
-            border: '1px solid #d2992266',
-            borderRadius: '6px',
-            fontSize: '11px',
-            color: '#d29922',
-            cursor: 'pointer',
-          }}
-        >
-          🔄 재생성
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ── Image Gallery ───────────────────────────────
-
-function ImageGallery({
-  generatedImages,
-  imagePrompts,
-  onRegenerate,
-}: {
-  generatedImages: GeneratedImage[];
-  imagePrompts?: ImagePrompt[];
-  onRegenerate: (promptIndex: number) => void;
-}) {
-  const prompts = imagePrompts ?? [];
-  const thumbnailPrompts = prompts.filter((p) => p.type === 'thumbnail');
-  const contentPrompts = prompts.filter((p) => p.type === 'content');
-
-  const findImg = (p: ImagePrompt) =>
-    generatedImages.find(
-      (img) => img.type === p.type && img.insertAfterSection === p.insertAfterSection
-    );
-
-  // Fallback: no imagePrompts — render generatedImages directly
-  if (prompts.length === 0) {
-    const thumbs = generatedImages.filter((img) => img.type === 'thumbnail');
-    const content = generatedImages.filter((img) => img.type === 'content');
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-        {thumbs.map((img, i) => (
-          <div key={i}>
-            <SectionLabel>📸 썸네일 (16:9)</SectionLabel>
-            <ImageCard img={img} onRegenerate={() => onRegenerate(i)} />
-          </div>
-        ))}
-        {content.length > 0 && (
-          <div>
-            <SectionLabel>🖼️ 본문용 이미지 (1:1)</SectionLabel>
-            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-              {content.map((img, i) => (
-                <ContentCard
-                  key={i}
-                  img={img}
-                  onRegenerate={() => onRegenerate(thumbs.length + i)}
-                />
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-      {/* 썸네일 (16:9) */}
-      {thumbnailPrompts.map((prompt) => {
-        const promptIndex = prompts.indexOf(prompt);
-        const img = findImg(prompt);
-        return (
-          <div key={promptIndex}>
-            <SectionLabel>📸 썸네일 (16:9)</SectionLabel>
-            {img ? (
-              <ImageCard img={img} onRegenerate={() => onRegenerate(promptIndex)} />
-            ) : (
-              <FailurePlaceholder aspectRatio="16:9" onRegenerate={() => onRegenerate(promptIndex)} />
-            )}
-          </div>
-        );
-      })}
-
-      {/* 본문용 이미지 (1:1) */}
-      {contentPrompts.length > 0 && (
-        <div>
-          <SectionLabel>🖼️ 본문용 이미지 (1:1)</SectionLabel>
-          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-            {contentPrompts.map((prompt) => {
-              const promptIndex = prompts.indexOf(prompt);
-              const img = findImg(prompt);
-              return img ? (
-                <ContentCard key={promptIndex} img={img} onRegenerate={() => onRegenerate(promptIndex)} />
-              ) : (
-                <FailurePlaceholder
-                  key={promptIndex}
-                  aspectRatio="1:1"
-                  onRegenerate={() => onRegenerate(promptIndex)}
-                />
-              );
-            })}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <div style={{
-      fontSize: '11px', color: '#8b949e', fontWeight: 600,
-      marginBottom: '8px', fontFamily: "'DM Mono', monospace",
-    }}>
-      {children}
-    </div>
-  );
-}
-
-function ImageCard({ img, onRegenerate }: { img: GeneratedImage; onRegenerate: () => void }) {
-  return (
-    <div style={{ position: 'relative', display: 'inline-block', width: '100%' }}>
-      <img
-        src={img.url}
-        alt={img.altText}
-        style={{ width: '100%', borderRadius: '8px', display: 'block' }}
-      />
-      <button
-        onClick={onRegenerate}
-        style={{
-          position: 'absolute', bottom: '8px', right: '8px',
-          padding: '5px 10px', background: '#0d111799',
-          border: '1px solid #58a6ff88', borderRadius: '6px',
-          fontSize: '11px', color: '#58a6ff', cursor: 'pointer',
-          backdropFilter: 'blur(4px)',
-        }}
-      >
-        🔄 재생성
-      </button>
-    </div>
-  );
-}
-
-function ContentCard({ img, onRegenerate }: { img: GeneratedImage; onRegenerate: () => void }) {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', width: '140px', flexShrink: 0 }}>
-      <div style={{ position: 'relative' }}>
-        <img
-          src={img.url}
-          alt={img.altText}
-          style={{ width: '140px', height: '140px', objectFit: 'cover', borderRadius: '6px', display: 'block' }}
-        />
-        <button
-          onClick={onRegenerate}
-          style={{
-            position: 'absolute', bottom: '4px', right: '4px',
-            padding: '3px 7px', background: '#0d111799',
-            border: '1px solid #58a6ff88', borderRadius: '4px',
-            fontSize: '10px', color: '#58a6ff', cursor: 'pointer',
-            backdropFilter: 'blur(4px)',
-          }}
-        >
-          🔄
-        </button>
-      </div>
-      <span style={{
-        fontSize: '10px', color: '#484f58',
-        overflow: 'hidden', textOverflow: 'ellipsis',
-        whiteSpace: 'nowrap', maxWidth: '140px',
-      }}>
-        {img.altText}
-      </span>
-    </div>
-  );
-}
-
-// ── Skeleton ─────────────────────────────────────
-
-function ImageSkeleton() {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-      <div style={{
-        fontSize: '11px', color: '#484f58', fontWeight: 600,
-        fontFamily: "'DM Mono', monospace",
-      }}>
-        🎨 이미지 생성 중...
-      </div>
-      <div className="animate-pulse" style={{ width: '100%', paddingBottom: '56.25%', background: '#21262d', borderRadius: '8px' }} />
-      <div style={{ display: 'flex', gap: '10px' }}>
-        {[0, 1, 2].map((i) => (
-          <div key={i} className="animate-pulse" style={{ width: '100px', height: '100px', background: '#21262d', borderRadius: '6px', flexShrink: 0 }} />
-        ))}
-      </div>
-    </div>
-  );
 }
 
 // ── Publish Checklist ───────────────────────────
@@ -274,10 +22,7 @@ interface CheckItem {
   detail: string;
 }
 
-function buildChecklist(
-  draft: DraftResult,
-  generatedImages: GeneratedImage[]
-): CheckItem[] {
+function buildChecklist(draft: DraftResult): CheckItem[] {
   const titleLen = draft.meta_title.length;
   const cleanTags = (draft.tags ?? []).map((t) => t.replace(/^#+/, ''));
   const hasTagHash = (draft.tags ?? []).some((t) => t.startsWith('#'));
@@ -309,11 +54,6 @@ function buildChecklist(
       detail: draft.category || '미지정',
     },
     {
-      label: '이미지 1장 이상',
-      pass: generatedImages.length > 0,
-      detail: generatedImages.length > 0 ? `${generatedImages.length}장` : '없음',
-    },
-    {
       label: '내부 링크 2개 이상',
       pass: internalLinkCount >= 2,
       detail: `${internalLinkCount}개 감지`,
@@ -331,15 +71,9 @@ function buildChecklist(
   ];
 }
 
-function PublishChecklist({
-  draft,
-  generatedImages,
-}: {
-  draft: DraftResult;
-  generatedImages: GeneratedImage[];
-}) {
+function PublishChecklist({ draft }: { draft: DraftResult }) {
   const [open, setOpen] = useState(false);
-  const items = buildChecklist(draft, generatedImages);
+  const items = buildChecklist(draft);
   const failCount = items.filter((i) => !i.pass).length;
   const allPass = failCount === 0;
 
@@ -381,48 +115,17 @@ function PublishChecklist({
 
 export function DraftBox({
   draft,
-  generatedImages,
-  isGeneratingImages,
-  imagePrompts,
-  imageError,
   onCopy,
   onRevise,
   onReset,
-  onSaveToNotes,
-  onRegenerateImage,
-  onGenerateImages,
 }: DraftBoxProps) {
   const [copied, setCopied] = useState(false);
-  const [copiedWithImages, setCopiedWithImages] = useState(false);
-
-  const hasImages = generatedImages.length > 0;
-  const hasImagePrompts = (imagePrompts?.length ?? 0) > 0;
-  const showImageSection = isGeneratingImages || hasImages || hasImagePrompts || !!imageError;
-
-  const contentWithImages = hasImages
-    ? injectImagesIntoContent(draft.content, generatedImages)
-    : draft.content;
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(draft.content);
     setCopied(true);
     onCopy();
     setTimeout(() => setCopied(false), 1500);
-  };
-
-  const handleCopyWithImages = async () => {
-    const injected = injectImagesIntoContent(draft.content, generatedImages);
-    await navigator.clipboard.writeText(injected);
-    setCopiedWithImages(true);
-
-    const bytes = new TextEncoder().encode(injected).length;
-    const mb = bytes / (1024 * 1024);
-    if (mb > 1) {
-      toast('📋 복사 완료! 이미지가 포함된 대용량 데이터입니다. 티스토리 붙여넣기 시 시간이 걸릴 수 있습니다.', { duration: 5000 });
-    } else {
-      toast.success('이미지 포함 전체 복사됨! 티스토리에 바로 붙여넣기 가능합니다.', { duration: 3000 });
-    }
-    setTimeout(() => setCopiedWithImages(false), 1500);
   };
 
   return (
@@ -473,46 +176,7 @@ export function DraftBox({
       )}
 
       {/* 발행 전 체크리스트 */}
-      <PublishChecklist draft={draft} generatedImages={generatedImages} />
-
-      {/* 이미지 섹션 */}
-      {showImageSection && (
-        <div style={{ padding: '14px', background: '#161b22', border: '1px solid #30363d', borderRadius: '8px' }}>
-          {imageError ? (
-            <div style={{ fontSize: '12px', color: '#8b949e', lineHeight: 1.6 }}>
-              <span style={{ color: '#d29922' }}>⚠️</span> {imageError}
-            </div>
-          ) : isGeneratingImages ? (
-            <ImageSkeleton />
-          ) : hasImages || hasImagePrompts ? (
-            <ImageGallery
-              generatedImages={generatedImages}
-              imagePrompts={imagePrompts}
-              onRegenerate={onRegenerateImage}
-            />
-          ) : null}
-        </div>
-      )}
-
-      {/* 이미지 자동 생성 버튼 (이미지 없고 오류 없을 때) */}
-      {!isGeneratingImages && !hasImages && !hasImagePrompts && !imageError && onGenerateImages && (
-        <button
-          onClick={onGenerateImages}
-          style={{
-            padding: '10px 14px',
-            background: '#388bfd14',
-            border: '1px solid #388bfd44',
-            borderRadius: '8px',
-            fontSize: '13px', fontWeight: 600,
-            color: '#388bfd', cursor: 'pointer',
-            transition: 'background 0.15s',
-          }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = '#388bfd22')}
-          onMouseLeave={(e) => (e.currentTarget.style.background = '#388bfd14')}
-        >
-          🎨 이미지 자동 생성
-        </button>
-      )}
+      <PublishChecklist draft={draft} />
 
       {/* 본문 마크다운 */}
       <div style={{ maxHeight: '420px', overflowY: 'auto', padding: '16px', background: '#0d1117', border: '1px solid #30363d', borderRadius: '8px', fontSize: '13px', color: '#e6edf3', lineHeight: 1.85 }}>
@@ -528,57 +192,29 @@ export function DraftBox({
             li: ({ children }) => <li style={{ marginBottom: '4px', lineHeight: 1.75 }}>{children}</li>,
             code: ({ children }) => <code style={{ fontFamily: "'DM Mono', monospace", fontSize: '12px', background: '#1c2330', padding: '1px 6px', borderRadius: '3px', color: '#e6b84a' }}>{children}</code>,
             blockquote: ({ children }) => <blockquote style={{ borderLeft: '3px solid #e6b84a', paddingLeft: '12px', color: '#8b949e', margin: '10px 0', fontStyle: 'italic' }}>{children}</blockquote>,
-            img: ({ src, alt }) => {
-              const genImg = generatedImages.find((img) => img.url === src);
-              const isWide = genImg?.aspectRatio === '16:9';
-              return (
-                <img src={src ?? ''} alt={alt ?? ''} style={{ width: isWide ? '100%' : '60%', display: 'block', margin: isWide ? '16px 0' : '16px auto', borderRadius: '8px' }} />
-              );
-            },
           }}
         >
-          {contentWithImages}
+          {draft.content}
         </ReactMarkdown>
       </div>
 
       {/* 하단 버튼 */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
         <div style={{ display: 'flex', gap: '7px' }}>
-          {hasImages && (
-            <button
-              onClick={handleCopyWithImages}
-              style={{
-                flex: 3, padding: '10px 12px',
-                background: copiedWithImages ? 'linear-gradient(135deg, #56d364, #3fb950)' : 'linear-gradient(135deg, #388bfd, #1f6feb)',
-                border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: 600,
-                color: '#ffffff', cursor: 'pointer', transition: 'all 0.2s',
-              }}
-            >
-              {copiedWithImages ? '✅ 복사됨!' : '🖼️ 이미지 포함 전체 복사'}
-            </button>
-          )}
           <button
             onClick={handleCopy}
             style={{
-              flex: hasImages ? 2 : 3, padding: '10px 12px',
+              flex: 1, padding: '10px 12px',
               background: copied ? 'linear-gradient(135deg, #56d364, #3fb950)' : 'linear-gradient(135deg, #e6b84a, #c9953a)',
               border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: 600,
               color: '#0d1117', cursor: 'pointer', transition: 'all 0.2s',
             }}
           >
-            {copied ? '✅ 복사됨!' : '📋 텍스트만 복사'}
+            {copied ? '✅ 복사됨!' : '📋 텍스트 복사'}
           </button>
         </div>
 
         <div style={{ display: 'flex', gap: '7px' }}>
-          <button
-            onClick={onSaveToNotes}
-            style={ghostBtn}
-            onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#8b949e'; e.currentTarget.style.color = '#e6edf3'; }}
-            onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#30363d'; e.currentTarget.style.color = '#8b949e'; }}
-          >
-            🍎 Notes 저장{hasImages ? ` (+${generatedImages.length}장)` : ''}
-          </button>
           <button
             onClick={onRevise}
             style={ghostBtn}

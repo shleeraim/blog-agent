@@ -19,7 +19,19 @@
       "Bash(git push *)",
       "Bash(curl -s -X POST http://localhost:3000/api/images -H 'Content-Type: application/json' -d '{ *)",
       "Bash(python3 -c ' *)",
-      "Bash(kill %1)"
+      "Bash(kill %1)",
+      "Bash(gh deployment *)",
+      "Bash(gh run *)",
+      "Bash(curl -s \"https://api.github.com/repos/shleeraim/blog-agent/deployments?per_page=3\")",
+      "Bash(vercel env *)",
+      "Bash(npx vercel *)",
+      "Bash(curl -s -X POST http://localhost:3000/api/agent -H 'Content-Type: application/json' -d '{\"step\":\"evaluate\",\"userMessage\":\"평가해주세요\",\"topics\":[\"ETF 투자\",\"부동산 절세\"],\"history\":[],\"settings\":{\"categories\":[\"ETF/펀드\"],\"level\":\"all\",\"useSearch\":false,\"useSeo\":true,\"useFormat\":true,\"length\":\"medium\"}}' --max-time 15)",
+      "Bash(npx tsc *)",
+      "Bash(node -e ' *)",
+      "Bash(git restore *)",
+      "Bash(pnpm config *)",
+      "Bash(pnpm add *)",
+      "Bash(pnpm remove *)"
     ],
     "additionalDirectories": [
       "/private/tmp"

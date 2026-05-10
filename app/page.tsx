@@ -19,12 +19,11 @@ const INITIAL_PIPELINE_STEPS: PipelineStep[] = [
   { id: 'evaluate',     label: '📊 SEO 자동 평가',       status: 'waiting' },
   { id: 'select',       label: '🏆 최적 주제 선택',       status: 'waiting' },
   { id: 'draft',        label: '✍️ 초안 작성',           status: 'waiting' },
-  { id: 'imagePrompts', label: '🎨 이미지 프롬프트 생성', status: 'waiting' },
-  { id: 'images',       label: '🖼️ 이미지 생성',        status: 'waiting' },
+  
 ];
 
 const WELCOME_AUTO =
-  '안녕하세요! 재테크 블로그 에이전트입니다.\n🚀 자동 완성 모드가 켜져 있습니다. 주제를 입력하면 탐색 → SEO 평가 → 초안 → 이미지까지 자동으로 완성합니다.';
+  '안녕하세요! 재테크 블로그 에이전트입니다.\n🚀 자동 완성 모드가 켜져 있습니다. 주제를 입력하면 탐색 → SEO 평가 → 초안까지 자동으로 완성합니다.';
 const WELCOME_MANUAL =
   '안녕하세요! 재테크 블로그 에이전트입니다.\n🔧 수동 모드입니다. 주제 탐색만 하거나 원하는 주제를 직접 입력해 주세요.';
 
@@ -34,8 +33,7 @@ const AUTO_PLACEHOLDER = '어떤 주제로 작성할까요? (예: ETF 투자, �
 export default function Home() {
   const [streamingText, setStreamingText] = useState('');
   const [pipelineSteps, setPipelineSteps] = useState<PipelineStep[]>(INITIAL_PIPELINE_STEPS);
-  const [imageError, setImageError] = useState<string | null>(null);
-
+  
   const {
     currentStep,
     messages,
@@ -44,9 +42,6 @@ export default function Home() {
     drafts,
     selectedTopics,
     autoMode,
-    generatedImages,
-    imagePrompts,
-    isGeneratingImages,
     reset,
     setStep,
     removeDraft,
@@ -101,8 +96,6 @@ export default function Home() {
     store.setIsPipelineRunning(true);
     store.clearDrafts();
     store.setDraft(null);
-    store.setImagePrompts([]);
-    store.setGeneratedImages([]);
     setPipelineSteps(INITIAL_PIPELINE_STEPS);
 
     try {
@@ -164,11 +157,21 @@ export default function Home() {
       updateStep('draft', 'running');
       useAgentStore.getState().clearApiHistory();
       useAgentStore.getState().setDraft(null);
+      useAgentStore.getState().setDirection(null); // 이전 direction 캐시 제거
 
       await sendMessageRef.current(
         `주제 "${selected.title}"로 블로그 방향성을 설정해주세요.`,
         'direction', { noStepAdvance: true }
       );
+
+      // direction 파싱 실패 시 draft 건너뜀 (연쇄 실패 방지)
+      const direction = useAgentStore.getState().direction;
+      if (!direction) {
+        updateStep('draft', 'error', '방향성 설정 실패 — 재시도 필요');
+        toast.error('방향성 설정에 실패했습니다. 다시 시도해 주세요.', { duration: 5000 });
+        return;
+      }
+
       await sendMessageRef.current(
         '이 방향으로 블로그 초안을 작성해주세요.',
         'draft', { noStepAdvance: true }
@@ -176,76 +179,21 @@ export default function Home() {
 
       const draft = useAgentStore.getState().draft;
       if (!draft) {
-        updateStep('draft', 'error', '초안 생성 실패');
-        toast.error('초안 생성에 실패했습니다.', { duration: 5000 });
+        // 마지막 에이전트 메시지에서 실제 오류 원인 추출
+        const msgs = useAgentStore.getState().messages;
+        const lastMsg = msgs[msgs.length - 1];
+        const reason =
+          lastMsg?.content?.startsWith('⚠️') ? lastMsg.content.slice(3) : '초안 생성 실패 — 재시도 필요';
+        updateStep('draft', 'error', reason.slice(0, 40));
+        toast.error('초안 생성에 실패했습니다. 다시 시도해 주세요.', { duration: 5000 });
         return;
       }
       useAgentStore.getState().addDraft(draft);
       updateStep('draft', 'done', `${draft.word_count}자 초안 완성`);
 
-      // ── Step 5: 이미지 프롬프트 생성 ──────────────
-      updateStep('imagePrompts', 'running');
-      useAgentStore.getState().clearApiHistory();
-
-      let imagePromptsOk = false;
-      try {
-        await sendMessageRef.current('이미지 프롬프트를 생성해주세요.', 'imagePrompts', {
-          noStepAdvance: true,
-          silent: true,
-          extraPayload: {
-            content: draft.content,
-            metaTitle: draft.meta_title,
-            category: settings.categories[0] ?? '재테크',
-          },
-        });
-        const imagePrompts = useAgentStore.getState().imagePrompts;
-        imagePromptsOk = imagePrompts.length > 0;
-        if (imagePromptsOk) {
-          const contentCount = imagePrompts.filter((p) => p.type === 'content').length;
-          updateStep('imagePrompts', 'done', `썸네일 1장 + 본문용 ${contentCount}장 프롬프트 생성`);
-        }
-      } catch {
-        imagePromptsOk = false;
-      }
-
-      if (!imagePromptsOk) {
-        updateStep('imagePrompts', 'error', '이미지 프롬프트 생성 실패');
-        updateStep('images', 'error', '이미지 생성 건너뜀');
-        useAgentStore.getState().setStep(4);
-        toast.success('초안이 완성되었습니다! (이미지 생성 건너뜀)', { duration: 4000 });
-        return;
-      }
-
-      // ── Step 6: 이미지 생성 ───────────────────────
-      updateStep('images', 'running');
-      useAgentStore.getState().setGeneratingImages(true);
-
-      try {
-        const imagePrompts = useAgentStore.getState().imagePrompts;
-        const res = await fetch('/api/images', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ imagePrompts }),
-        });
-        const data = await res.json();
-        const images = data.images ?? [];
-        useAgentStore.getState().setGeneratedImages(images);
-
-        if (images.length > 0) {
-          updateStep('images', 'done', `이미지 ${images.length}장 생성 완료`);
-        } else {
-          updateStep('images', 'error', '이미지 생성 실패 — 텍스트만 저장됨');
-        }
-      } catch {
-        updateStep('images', 'error', '이미지 생성 실패 — 텍스트만 저장됨');
-        toast.error('이미지 생성에 실패했습니다. 초안은 정상 완성되었습니다.', { duration: 4000 });
-      } finally {
-        useAgentStore.getState().setGeneratingImages(false);
-      }
-
-      // 완료 (이미지 실패해도 진행)
+      // 완료
       useAgentStore.getState().setStep(4);
-      toast.success('초안과 이미지가 완성되었습니다! 🎉', { duration: 4000 });
+      toast.success('초안이 완성되었습니다! 🎉', { duration: 4000 });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : '파이프라인 실행 중 오류가 발생했습니다.';
       toast.error(msg, { duration: 5000 });
@@ -280,105 +228,7 @@ export default function Home() {
     await sendMessage(text, step);
   }, [sendMessage, runAutoPipeline]);
 
-  // ──────────────────────────────────────────────
-  // 이미지 재생성 / 수동 이미지 생성
-  // ──────────────────────────────────────────────
 
-  const handleRegenerateImage = useCallback(async (promptIndex: number) => {
-    const prompts = useAgentStore.getState().imagePrompts;
-    const prompt = prompts[promptIndex];
-    if (!prompt) return;
-
-    useAgentStore.getState().setGeneratingImages(true);
-    try {
-      const res = await fetch('/api/images', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imagePrompts: [prompt] }),
-      });
-      const data = await res.json();
-
-      if (res.status === 400 && data.error?.includes('GEMINI_API_KEY')) {
-        setImageError('GEMINI API 키가 설정되지 않았습니다. .env.local에 GEMINI_API_KEY를 추가해주세요.');
-        return;
-      }
-
-      const [newImage] = data.images ?? [];
-      if (!newImage) {
-        toast.error('이미지 재생성에 실패했습니다. 다시 시도해주세요.', { duration: 4000 });
-        return;
-      }
-
-      const prev = useAgentStore.getState().generatedImages;
-      const idx = prev.findIndex(
-        (img) => img.type === newImage.type && img.insertAfterSection === newImage.insertAfterSection
-      );
-      const updated = [...prev];
-      if (idx >= 0) {
-        updated[idx] = newImage;
-      } else {
-        updated.push(newImage);
-      }
-      useAgentStore.getState().setGeneratedImages(updated);
-      toast.success('이미지가 재생성되었습니다! ✨', { duration: 2000 });
-    } catch {
-      toast.error('이미지 재생성에 실패했습니다. 다시 시도해주세요.', { duration: 4000 });
-    } finally {
-      useAgentStore.getState().setGeneratingImages(false);
-    }
-  }, []);
-
-  const handleGenerateImages = useCallback(async () => {
-    const state = useAgentStore.getState();
-    const draft = state.drafts[0];
-    if (!draft) return;
-
-    setImageError(null);
-    useAgentStore.getState().setGeneratingImages(true);
-    try {
-      state.clearApiHistory();
-      await sendMessageRef.current('이미지 프롬프트를 생성해주세요.', 'imagePrompts', {
-        noStepAdvance: true,
-        silent: true,
-        extraPayload: {
-          content: draft.content,
-          metaTitle: draft.meta_title,
-          category: state.settings.categories[0] ?? '재테크',
-        },
-      });
-
-      const prompts = useAgentStore.getState().imagePrompts;
-      if (prompts.length === 0) {
-        toast.error('이미지 프롬프트 생성에 실패했습니다.', { duration: 4000 });
-        return;
-      }
-
-      const res = await fetch('/api/images', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imagePrompts: prompts }),
-      });
-      const data = await res.json();
-
-      if (res.status === 400 && data.error?.includes('GEMINI_API_KEY')) {
-        setImageError('GEMINI API 키가 설정되지 않았습니다. .env.local에 GEMINI_API_KEY를 추가해주세요.');
-        return;
-      }
-
-      const images = data.images ?? [];
-      useAgentStore.getState().setGeneratedImages(images);
-
-      if (images.length > 0) {
-        toast.success(`이미지 ${images.length}장이 생성되었습니다! 🎉`, { duration: 3000 });
-      } else {
-        toast.error('이미지 생성에 실패했습니다.', { duration: 4000 });
-      }
-    } catch {
-      toast.error('이미지 생성 중 오류가 발생했습니다.', { duration: 4000 });
-    } finally {
-      useAgentStore.getState().setGeneratingImages(false);
-    }
-  }, []);
 
   // ──────────────────────────────────────────────
   // DualDraftBox 핸들러
@@ -386,8 +236,7 @@ export default function Home() {
 
   const handleCopyAll = useCallback(() => {}, []);
   const handleCopyOne = useCallback((_i: number) => {}, []);
-  const handleSaveToNotes = useCallback((_i: number) => {}, []);
-
+  
   const handleRewrite = useCallback((index: number) => {
     removeDraft(index);
     setStep(3);
@@ -398,7 +247,6 @@ export default function Home() {
   const handleReset = useCallback(() => {
     clearDrafts();
     setPipelineSteps(INITIAL_PIPELINE_STEPS);
-    setImageError(null);
     reset();
   }, [clearDrafts, reset]);
 
@@ -423,25 +271,18 @@ export default function Home() {
         <StepBar currentStep={currentStep} />
 
         {drafts.length >= 1 ? (
-          imagePrompts.length > 0 || isGeneratingImages ? (
-            // 자동 파이프라인 결과: 이미지 포함 DraftBox
+          autoMode ? (
+            // 자동 파이프라인 결과: 단일 초안 DraftBox
             <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px' }}>
               <DraftBox
                 draft={drafts[0]}
-                generatedImages={generatedImages}
-                isGeneratingImages={isGeneratingImages}
-                imagePrompts={imagePrompts}
-                imageError={imageError ?? undefined}
                 onCopy={() => {}}
                 onRevise={() => handleRewrite(0)}
                 onReset={handleReset}
-                onSaveToNotes={() => {}}
-                onRegenerateImage={handleRegenerateImage}
-                onGenerateImages={handleGenerateImages}
               />
             </div>
           ) : (
-            // 수동 모드 또는 이미지 없는 결과: 기존 DualDraftBox
+            // 수동 모드 결과: 2개 초안 DualDraftBox
             <DualDraftBox
               drafts={drafts}
               selectedTopics={selectedTopics}
@@ -450,7 +291,6 @@ export default function Home() {
               onCopyOne={handleCopyOne}
               onRewrite={handleRewrite}
               onReset={handleReset}
-              onSaveToNotes={handleSaveToNotes}
             />
           )
         ) : (

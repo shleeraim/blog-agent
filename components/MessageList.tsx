@@ -195,13 +195,9 @@ function MessageRow({
         ) : msg.type === 'draft' && msg.data ? (
           <DraftBox
             draft={msg.data as DraftResult}
-            generatedImages={[]}
-            isGeneratingImages={false}
             onCopy={onDraftCopy ?? (() => {})}
             onRevise={onDraftRevise ?? (() => {})}
             onReset={onDraftReset ?? (() => {})}
-            onSaveToNotes={() => {}}
-            onRegenerateImage={() => {}}
           />
         ) : (
           <div
