@@ -103,7 +103,7 @@ export async function POST(req: NextRequest) {
       try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const params: any = {
-          model: 'claude-3-7-sonnet-20250219',
+          model: 'claude-sonnet-4-6',
           max_tokens: maxTokens,
           system: systemPrompt,
           messages: apiMessages,
