@@ -4,6 +4,7 @@ import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { toast } from 'sonner';
 import type { DraftResult } from '@/lib/types';
+import { buildToc, type TocEntry } from '@/lib/utils';
 
 // ── Types ───────────────────────────────────────
 
@@ -111,6 +112,58 @@ function PublishChecklist({ draft }: { draft: DraftResult }) {
   );
 }
 
+// ── Table of Contents ───────────────────────────
+
+function TableOfContents({ content }: { content: string }) {
+  const entries = buildToc(content);
+  if (entries.length < 2) return null;
+
+  return (
+    <div style={{
+      padding: '14px 16px', background: '#161b22',
+      border: '1px solid #30363d', borderRadius: '8px',
+    }}>
+      <div style={{
+        fontSize: '11px', fontWeight: 700, color: '#8b949e',
+        fontFamily: "'DM Mono', monospace",
+        letterSpacing: '0.08em', marginBottom: '10px',
+      }}>
+        목차
+      </div>
+      <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '5px' }}>
+        {entries.map((entry, i) => (
+          <li
+            key={i}
+            style={{
+              display: 'flex', alignItems: 'flex-start', gap: '8px',
+              paddingLeft: entry.level === 3 ? '16px' : '0',
+              fontSize: entry.level === 3 ? '11px' : '12px',
+              color: entry.level === 3 ? '#8b949e' : '#c9d1d9',
+              lineHeight: 1.5,
+            }}
+          >
+            <span style={{
+              flexShrink: 0, color: '#484f58', fontSize: '10px', marginTop: '2px',
+            }}>·</span>
+            <span>
+              <span style={{
+                fontFamily: "'DM Mono', monospace",
+                color: entry.level === 3 ? '#484f58' : '#8b949e',
+                marginRight: '6px', fontSize: '10px',
+              }}>
+                {entry.level === 2
+                  ? `${entry.h2Index}.`
+                  : `${entry.h2Index}.${entry.h3Index}`}
+              </span>
+              {entry.text}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 // ── Main Component ──────────────────────────────
 
 export function DraftBox({
@@ -177,6 +230,9 @@ export function DraftBox({
 
       {/* 발행 전 체크리스트 */}
       <PublishChecklist draft={draft} />
+
+      {/* 목차 */}
+      <TableOfContents content={draft.content} />
 
       {/* 본문 마크다운 */}
       <div style={{ maxHeight: '420px', overflowY: 'auto', padding: '16px', background: '#0d1117', border: '1px solid #30363d', borderRadius: '8px', fontSize: '13px', color: '#e6edf3', lineHeight: 1.85 }}>

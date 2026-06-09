@@ -68,7 +68,7 @@ export async function POST(req: NextRequest) {
   // ── 파라미터 결정 ────────────────────────────────
   const tokenMap: Record<string, number> = {
     evaluate: 3000,
-    topic: 3000, direction: 4000, draft: 8192, freeform: 4000,
+    topic: 3000, direction: 6000, draft: 16000, freeform: 4000,
   };
   const maxTokens = tokenMap[step] ?? 4000;
 

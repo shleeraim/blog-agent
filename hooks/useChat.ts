@@ -118,7 +118,12 @@ export function useChat({
                       if (!options?.noStepAdvance) st.setStep(4);
                     }
                     st.addApiHistory('assistant', accumulated);
-                  } catch {
+                  } catch (parseErr) {
+                    console.error('[useChat] JSON parse failed', {
+                      step,
+                      error: parseErr instanceof Error ? parseErr.message : String(parseErr),
+                      preview: accumulated.slice(0, 300),
+                    });
                     st.addMessage({
                       role: 'agent',
                       content: '응답 파싱에 실패했습니다.',
