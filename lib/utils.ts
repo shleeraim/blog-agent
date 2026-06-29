@@ -1,5 +1,6 @@
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import type { DraftResult } from '@/lib/types';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -134,4 +135,40 @@ export function extractJson(text: string): string {
   }
 
   throw new Error('Incomplete JSON object in response');
+}
+
+// ── Draft response parsing ────────────────────────
+//
+// 초안(content) 전체를 JSON 문자열 값 안에 넣어 달라고 하면, 모델이 본문 속
+// 따옴표·줄바꿈을 escape하다가 한 글자라도 틀리면 JSON.parse가 전부 깨진다.
+// 그래서 draft 응답은 "메타데이터 JSON" + 구분자 + "원본 마크다운 본문" 두
+// 덩어리로 나눠서 받는다 — 본문 쪼개는 부분은 JSON이 아니므로 escape가 필요
+// 없고, 이 클래스의 파싱 실패 자체가 발생할 수 없다.
+export const DRAFT_BODY_MARKER = '===DRAFT_BODY===';
+
+export function parseDraftResponse(raw: string): DraftResult {
+  const idx = raw.indexOf(DRAFT_BODY_MARKER);
+
+  // 구버전 폴백: 모델이 구분자 형식을 안 지키고 content까지 한 JSON에 담은 경우
+  if (idx === -1) {
+    const parsed = JSON.parse(extractJson(raw)) as Partial<DraftResult>;
+    return normalizeDraft(parsed, parsed.content ?? '');
+  }
+
+  const metaPart = raw.slice(0, idx);
+  const content = raw.slice(idx + DRAFT_BODY_MARKER.length).trim();
+  const meta = JSON.parse(extractJson(metaPart)) as Partial<DraftResult>;
+  return normalizeDraft(meta, content);
+}
+
+function normalizeDraft(meta: Partial<DraftResult>, content: string): DraftResult {
+  return {
+    meta_title: meta.meta_title ?? '',
+    meta_desc: meta.meta_desc ?? '',
+    category: meta.category ?? '',
+    tags: meta.tags ?? [],
+    content,
+    word_count: content.length,
+    seo_tips: meta.seo_tips ?? [],
+  };
 }

@@ -2,8 +2,8 @@
 
 import { useCallback, useRef } from 'react';
 import { useAgentStore } from '@/lib/store';
-import { extractJson } from '@/lib/utils';
-import type { Step, TopicResult, TopicEvaluation, DirectionResult, DraftResult } from '@/lib/types';
+import { extractJson, parseDraftResponse } from '@/lib/utils';
+import type { Step, TopicResult, TopicEvaluation, DirectionResult } from '@/lib/types';
 
 interface UseChatOptions {
   onStreamStart?: () => void;
@@ -93,29 +93,31 @@ export function useChat({
                   st.addApiHistory('assistant', accumulated);
                 } else {
                   try {
-                    const parsed = JSON.parse(extractJson(accumulated));
-                    if (step === 'topic') {
-                      const result = parsed as TopicResult;
-                      st.setTopics(result.topics);
-                      st.addMessage({ role: 'agent', content: result.intro, type: 'topics', data: result });
-                      if (!options?.noStepAdvance) st.setStep(2);
-                    } else if (step === 'evaluate') {
-                      const result = parsed as { evaluations: TopicEvaluation[]; selection_reason: string };
-                      const evaluations = result.evaluations ?? [];
-                      st.setEvaluations(evaluations);
-                      st.setSelectionReason(result.selection_reason ?? '');
-                      const sel = evaluations.filter((e) => e.selected).sort((a, b) => a.rank - b.rank);
-                      st.setSelectedTopics(sel);
-                    } else if (step === 'direction') {
-                      const result = parsed as DirectionResult;
-                      st.setDirection(result);
-                      st.addMessage({ role: 'agent', content: result.summary, type: 'direction', data: result });
-                      if (!options?.noStepAdvance) st.setStep(3);
-                    } else if (step === 'draft') {
-                      const result = parsed as DraftResult;
+                    if (step === 'draft') {
+                      const result = parseDraftResponse(accumulated);
                       st.setDraft(result);
                       st.addMessage({ role: 'agent', content: result.meta_title, type: 'draft', data: result });
                       if (!options?.noStepAdvance) st.setStep(4);
+                    } else {
+                      const parsed = JSON.parse(extractJson(accumulated));
+                      if (step === 'topic') {
+                        const result = parsed as TopicResult;
+                        st.setTopics(result.topics);
+                        st.addMessage({ role: 'agent', content: result.intro, type: 'topics', data: result });
+                        if (!options?.noStepAdvance) st.setStep(2);
+                      } else if (step === 'evaluate') {
+                        const result = parsed as { evaluations: TopicEvaluation[]; selection_reason: string };
+                        const evaluations = result.evaluations ?? [];
+                        st.setEvaluations(evaluations);
+                        st.setSelectionReason(result.selection_reason ?? '');
+                        const sel = evaluations.filter((e) => e.selected).sort((a, b) => a.rank - b.rank);
+                        st.setSelectedTopics(sel);
+                      } else if (step === 'direction') {
+                        const result = parsed as DirectionResult;
+                        st.setDirection(result);
+                        st.addMessage({ role: 'agent', content: result.summary, type: 'direction', data: result });
+                        if (!options?.noStepAdvance) st.setStep(3);
+                      }
                     }
                     st.addApiHistory('assistant', accumulated);
                   } catch (parseErr) {
