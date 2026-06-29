@@ -2,16 +2,71 @@
 
 import { useState } from 'react';
 import { useAgentStore } from '@/lib/store';
+import { buildToc, buildCopyMarkdown, copyAsHtml } from '@/lib/utils';
+import { draftToHtml } from '@/lib/draftHtml';
+
+// ── Table of Contents ───────────────────────────
+
+function TableOfContents({ content }: { content: string }) {
+  const entries = buildToc(content);
+  if (entries.length < 2) return null;
+
+  return (
+    <div style={{
+      padding: '10px 12px', background: '#161b22',
+      border: '1px solid #30363d', borderRadius: '8px',
+    }}>
+      <div style={{
+        fontSize: '10px', fontWeight: 700, color: '#8b949e',
+        letterSpacing: '0.08em', marginBottom: '7px',
+      }}>
+        목차
+      </div>
+      <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '4px' }}>
+        {entries.map((entry, i) => (
+          <li
+            key={i}
+            style={{
+              display: 'flex', alignItems: 'flex-start', gap: '6px',
+              paddingLeft: entry.level === 3 ? '14px' : '0',
+              fontSize: entry.level === 3 ? '10px' : '11px',
+              color: entry.level === 3 ? '#8b949e' : '#c9d1d9',
+              lineHeight: 1.5,
+            }}
+          >
+            <span style={{ flexShrink: 0, color: '#484f58', fontSize: '9px', marginTop: '2px' }}>·</span>
+            <span>
+              <span style={{ color: entry.level === 3 ? '#484f58' : '#8b949e', marginRight: '5px', fontSize: '9px' }}>
+                {entry.level === 2
+                  ? `${entry.h2Index}.`
+                  : `${entry.h2Index}.${entry.h3Index}`}
+              </span>
+              {entry.text}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
 
 export function RightPanel() {
   const { draft, currentStep } = useAgentStore();
   const [copied, setCopied] = useState(false);
+  const [copiedHtml, setCopiedHtml] = useState(false);
 
   const handleCopy = async () => {
     if (!draft) return;
-    await navigator.clipboard.writeText(draft.content);
+    await navigator.clipboard.writeText(buildCopyMarkdown(draft.content));
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleCopyHtml = async () => {
+    if (!draft) return;
+    await copyAsHtml(draftToHtml(draft.content), buildCopyMarkdown(draft.content));
+    setCopiedHtml(true);
+    setTimeout(() => setCopiedHtml(false), 2000);
   };
 
   // 초안이 없을 때
@@ -109,6 +164,9 @@ export function RightPanel() {
         ))}
       </div>
 
+      {/* 목차 */}
+      <TableOfContents content={draft.content} />
+
       {/* Content preview */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
         <p style={{ fontSize: '10px', fontWeight: 600, color: '#484f58', textTransform: 'uppercase', letterSpacing: '0.6px' }}>
@@ -150,22 +208,39 @@ export function RightPanel() {
         </div>
       )}
 
-      {/* Copy button */}
-      <button
-        onClick={handleCopy}
-        style={{
-          padding: '9px',
-          background: copied ? '#3fb95022' : 'linear-gradient(135deg, #1f6feb, #388bfd)',
-          border: copied ? '1px solid #3fb950' : 'none',
-          borderRadius: '8px',
-          color: '#fff',
-          fontSize: '12px', fontWeight: 600,
-          cursor: 'pointer',
-          transition: 'all 0.15s',
-        }}
-      >
-        {copied ? '✓ 복사 완료!' : '📋 마크다운 전체 복사'}
-      </button>
+      {/* Copy buttons */}
+      <div style={{ display: 'flex', gap: '6px' }}>
+        <button
+          onClick={handleCopy}
+          style={{
+            flex: 1, padding: '9px',
+            background: copied ? '#3fb95022' : 'linear-gradient(135deg, #1f6feb, #388bfd)',
+            border: copied ? '1px solid #3fb950' : 'none',
+            borderRadius: '8px',
+            color: '#fff',
+            fontSize: '12px', fontWeight: 600,
+            cursor: 'pointer',
+            transition: 'all 0.15s',
+          }}
+        >
+          {copied ? '✓ 복사 완료!' : '📋 마크다운 복사'}
+        </button>
+        <button
+          onClick={handleCopyHtml}
+          style={{
+            flex: 1, padding: '9px',
+            background: copiedHtml ? '#3fb95022' : 'linear-gradient(135deg, #58a6ff, #bc8cff)',
+            border: copiedHtml ? '1px solid #3fb950' : 'none',
+            borderRadius: '8px',
+            color: '#fff',
+            fontSize: '12px', fontWeight: 600,
+            cursor: 'pointer',
+            transition: 'all 0.15s',
+          }}
+        >
+          {copiedHtml ? '✓ 복사 완료!' : '🌐 HTML 복사'}
+        </button>
+      </div>
     </div>
   );
 }

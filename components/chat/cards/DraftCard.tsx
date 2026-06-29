@@ -15,14 +15,65 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import type { DraftResult } from '@/lib/types';
+import { buildToc, buildCopyMarkdown, copyAsHtml } from '@/lib/utils';
+import { draftToHtml } from '@/lib/draftHtml';
+
+// ── Table of Contents ───────────────────────────
+
+function TableOfContents({ content }: { content: string }) {
+  const entries = buildToc(content);
+  if (entries.length < 2) return null;
+
+  return (
+    <div style={{
+      padding: '12px 14px', background: '#161b22',
+      border: '1px solid #30363d', borderRadius: '8px',
+    }}>
+      <div style={{
+        fontSize: '10px', fontWeight: 700, color: '#8b949e',
+        letterSpacing: '0.08em', marginBottom: '8px',
+      }}>
+        목차
+      </div>
+      <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '4px' }}>
+        {entries.map((entry, i) => (
+          <li
+            key={i}
+            style={{
+              display: 'flex', alignItems: 'flex-start', gap: '6px',
+              paddingLeft: entry.level === 3 ? '14px' : '0',
+              fontSize: entry.level === 3 ? '11px' : '12px',
+              color: entry.level === 3 ? '#8b949e' : '#c9d1d9',
+              lineHeight: 1.5,
+            }}
+          >
+            <span style={{ flexShrink: 0, color: '#484f58', fontSize: '10px', marginTop: '2px' }}>·</span>
+            <span>
+              <span style={{
+                color: entry.level === 3 ? '#484f58' : '#8b949e',
+                marginRight: '5px', fontSize: '10px',
+              }}>
+                {entry.level === 2
+                  ? `${entry.h2Index}.`
+                  : `${entry.h2Index}.${entry.h3Index}`}
+              </span>
+              {entry.text}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
 
 export function DraftCard({ data }: { data: DraftResult }) {
   const { reset } = useAgentStore();
   const [copied, setCopied] = useState(false);
+  const [copiedHtml, setCopiedHtml] = useState(false);
   const [expanded, setExpanded] = useState(false);
 
   const handleCopy = async () => {
-    await navigator.clipboard.writeText(data.content);
+    await navigator.clipboard.writeText(buildCopyMarkdown(data.content));
     setCopied(true);
     toast('✅ 티스토리 에디터에 붙여넣기 하세요!', {
       duration: 3000,
@@ -34,6 +85,21 @@ export function DraftCard({ data }: { data: DraftResult }) {
       },
     });
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleCopyHtml = async () => {
+    await copyAsHtml(draftToHtml(data.content), buildCopyMarkdown(data.content));
+    setCopiedHtml(true);
+    toast('🌐 티스토리 HTML 모드에 붙여넣기 하세요!', {
+      duration: 3000,
+      style: {
+        background: '#161b22',
+        border: '1px solid #56d36455',
+        color: '#56d364',
+        fontWeight: 600,
+      },
+    });
+    setTimeout(() => setCopiedHtml(false), 2000);
   };
 
   const preview = data.content.slice(0, 300);
@@ -92,6 +158,9 @@ export function DraftCard({ data }: { data: DraftResult }) {
         ))}
       </div>
 
+      {/* 목차 */}
+      <TableOfContents content={data.content} />
+
       {/* Content preview */}
       <div
         style={{
@@ -122,7 +191,7 @@ export function DraftCard({ data }: { data: DraftResult }) {
       </div>
 
       {/* Expand / Copy / Reset buttons */}
-      <div style={{ display: 'flex', gap: '8px' }}>
+      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
         {hasMore && (
           <button
             onClick={() => setExpanded(!expanded)}
@@ -144,6 +213,21 @@ export function DraftCard({ data }: { data: DraftResult }) {
           }}
         >
           {copied ? '✓ 복사됨' : '📋 마크다운 복사'}
+        </button>
+
+        <button
+          onClick={handleCopyHtml}
+          style={{
+            ...ghostBtn,
+            flex: 2,
+            background: copiedHtml ? '#56d36422' : 'transparent',
+            borderColor: copiedHtml ? '#56d364' : '#30363d',
+            color: copiedHtml ? '#56d364' : '#8b949e',
+          }}
+          onMouseEnter={(e) => { if (!copiedHtml) { e.currentTarget.style.borderColor = '#58a6ff66'; e.currentTarget.style.color = '#58a6ff'; } }}
+          onMouseLeave={(e) => { if (!copiedHtml) { e.currentTarget.style.borderColor = '#30363d'; e.currentTarget.style.color = '#8b949e'; } }}
+        >
+          {copiedHtml ? '✓ 복사됨' : '🌐 HTML 복사'}
         </button>
 
         {/* 새 주제 AlertDialog */}
