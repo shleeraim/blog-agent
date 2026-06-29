@@ -12,6 +12,7 @@ export interface TocEntry {
   text: string;
   h2Index: number;
   h3Index: number;
+  slug: string;
 }
 
 export function buildToc(content: string): TocEntry[] {
@@ -25,13 +26,66 @@ export function buildToc(content: string): TocEntry[] {
     if (h2) {
       h2Count++;
       h3Count = 0;
-      entries.push({ level: 2, text: h2[1].trim(), h2Index: h2Count, h3Index: 0 });
+      entries.push({ level: 2, text: h2[1].trim(), h2Index: h2Count, h3Index: 0, slug: `toc-${h2Count}` });
     } else if (h3) {
       h3Count++;
-      entries.push({ level: 3, text: h3[1].trim(), h2Index: h2Count, h3Index: h3Count });
+      entries.push({ level: 3, text: h3[1].trim(), h2Index: h2Count, h3Index: h3Count, slug: `toc-${h2Count}-${h3Count}` });
     }
   }
   return entries;
+}
+
+// 헤딩 줄 바로 위에 <a id="toc-x"> 앵커를 심어, 복사한 마크다운에서도 목차 링크가 실제로 동작하게 함
+// (slug 규칙은 buildToc()와 동일하게 유지해야 함)
+function injectTocAnchors(content: string): string {
+  const out: string[] = [];
+  let h2Count = 0;
+  let h3Count = 0;
+
+  for (const line of content.split('\n')) {
+    const h2 = line.match(/^##\s+(.+)/);
+    const h3 = line.match(/^###\s+(.+)/);
+    if (h2) {
+      h2Count++;
+      h3Count = 0;
+      out.push(`<a id="toc-${h2Count}"></a>`);
+    } else if (h3) {
+      h3Count++;
+      out.push(`<a id="toc-${h2Count}-${h3Count}"></a>`);
+    }
+    out.push(line);
+  }
+  return out.join('\n');
+}
+
+function buildTocMarkdown(entries: TocEntry[]): string {
+  const lines = entries.map((e) => {
+    const num = e.level === 2 ? `${e.h2Index}.` : `${e.h2Index}.${e.h3Index}`;
+    const indent = e.level === 3 ? '    ' : '';
+    return `${indent}- [${num} ${e.text}](#${e.slug})`;
+  });
+  return `**목차**\n\n${lines.join('\n')}`;
+}
+
+// "텍스트/마크다운 복사" 버튼에 쓰는 최종 문자열 — 목차(앵커 링크) + 앵커가 심긴 본문
+export function buildCopyMarkdown(content: string): string {
+  const entries = buildToc(content);
+  if (entries.length < 2) return content;
+  return `${buildTocMarkdown(entries)}\n\n${injectTocAnchors(content)}`;
+}
+
+// HTML 클립보드 복사 — text/html을 지원하는 브라우저는 서식 있는 HTML로,
+// 그렇지 않으면 plainText로 폴백
+export async function copyAsHtml(html: string, plainText: string): Promise<void> {
+  if (typeof ClipboardItem !== 'undefined' && navigator.clipboard?.write) {
+    const item = new ClipboardItem({
+      'text/html': new Blob([html], { type: 'text/html' }),
+      'text/plain': new Blob([plainText], { type: 'text/plain' }),
+    });
+    await navigator.clipboard.write([item]);
+  } else {
+    await navigator.clipboard.writeText(plainText);
+  }
 }
 
 export function extractJson(text: string): string {

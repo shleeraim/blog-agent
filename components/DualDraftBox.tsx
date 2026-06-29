@@ -15,7 +15,8 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import type { DraftResult, TopicEvaluation } from '@/lib/types';
-import { buildToc } from '@/lib/utils';
+import { buildToc, buildCopyMarkdown, copyAsHtml } from '@/lib/utils';
+import { draftToHtml } from '@/lib/draftHtml';
 
 // ── Table of Contents ───────────────────────────
 
@@ -204,8 +205,10 @@ function DraftPanel({
   onRewrite: (i: number) => void;
 }) {
   const [copied, setCopied] = useState(false);
+  const [copiedHtml, setCopiedHtml] = useState(false);
+
   const handleCopy = async () => {
-    await navigator.clipboard.writeText(draft.content);
+    await navigator.clipboard.writeText(buildCopyMarkdown(draft.content));
     setCopied(true);
     onCopyOne(index);
     toast('📋 클립보드에 복사됐습니다! 티스토리에 붙여넣기 하세요.', {
@@ -213,6 +216,17 @@ function DraftPanel({
       style: { background: '#161b22', border: '1px solid #56d36455', color: '#56d364' },
     });
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleCopyHtml = async () => {
+    await copyAsHtml(draftToHtml(draft.content), buildCopyMarkdown(draft.content));
+    setCopiedHtml(true);
+    onCopyOne(index);
+    toast('🌐 HTML로 복사됐습니다! 티스토리 HTML 모드에 붙여넣기 하세요.', {
+      duration: 3000,
+      style: { background: '#161b22', border: '1px solid #56d36455', color: '#56d364' },
+    });
+    setTimeout(() => setCopiedHtml(false), 2000);
   };
 
   return (
@@ -327,6 +341,21 @@ function DraftPanel({
         </button>
 
         <button
+          onClick={handleCopyHtml}
+          style={{
+            ...ghostBtn,
+            flex: '1 1 auto',
+            background: copiedHtml ? '#56d36422' : 'transparent',
+            borderColor: copiedHtml ? '#56d364' : '#30363d',
+            color: copiedHtml ? '#56d364' : '#8b949e',
+          }}
+          onMouseEnter={(e) => { if (!copiedHtml) { e.currentTarget.style.borderColor = '#58a6ff66'; e.currentTarget.style.color = '#58a6ff'; } }}
+          onMouseLeave={(e) => { if (!copiedHtml) { e.currentTarget.style.borderColor = '#30363d'; e.currentTarget.style.color = '#8b949e'; } }}
+        >
+          {copiedHtml ? '✓ 복사됨' : '🌐 HTML 복사'}
+        </button>
+
+        <button
           onClick={() => onRewrite(index)}
           style={ghostBtn}
           onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#58a6ff66'; e.currentTarget.style.color = '#58a6ff'; }}
@@ -428,7 +457,7 @@ export function DualDraftBox({
 
   const handleCopyAll = async () => {
     if (drafts.length < 2) return;
-    const combined = `# ${drafts[0].meta_title}\n\n${drafts[0].content}\n\n---\n\n# ${drafts[1].meta_title}\n\n${drafts[1].content}`;
+    const combined = `# ${drafts[0].meta_title}\n\n${buildCopyMarkdown(drafts[0].content)}\n\n---\n\n# ${drafts[1].meta_title}\n\n${buildCopyMarkdown(drafts[1].content)}`;
     await navigator.clipboard.writeText(combined);
     setAllCopied(true);
     onCopyAll();

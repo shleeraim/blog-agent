@@ -16,9 +16,9 @@ function StatusIcon({ status }: { status: PipelineStep['status'] }) {
     return (
       <span style={{
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        width: '20px', height: '20px', borderRadius: '50%',
+        width: '13px', height: '13px', borderRadius: '50%',
         background: '#3fb95033', border: '1px solid #3fb950',
-        fontSize: '11px', color: '#3fb950', flexShrink: 0,
+        fontSize: '8px', color: '#3fb950', flexShrink: 0,
       }}>✓</span>
     );
   }
@@ -26,9 +26,9 @@ function StatusIcon({ status }: { status: PipelineStep['status'] }) {
     return (
       <span style={{
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        width: '20px', height: '20px', borderRadius: '50%',
+        width: '13px', height: '13px', borderRadius: '50%',
         background: '#d2992222', border: '1px solid #d29922',
-        fontSize: '11px', color: '#d29922', flexShrink: 0,
+        fontSize: '8px', color: '#d29922', flexShrink: 0,
       }}>⚠</span>
     );
   }
@@ -36,12 +36,12 @@ function StatusIcon({ status }: { status: PipelineStep['status'] }) {
     return (
       <span style={{
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        width: '20px', height: '20px', borderRadius: '50%',
+        width: '13px', height: '13px', borderRadius: '50%',
         background: '#1f6feb22', border: '1px solid #58a6ff', flexShrink: 0,
       }}>
         <span style={{
-          width: '10px', height: '10px',
-          border: '2px solid #30363d', borderTopColor: '#58a6ff',
+          width: '7px', height: '7px',
+          border: '1.5px solid #30363d', borderTopColor: '#58a6ff',
           borderRadius: '50%', animation: 'pipeline-spin 0.8s linear infinite',
           display: 'inline-block',
         }} />
@@ -51,9 +51,9 @@ function StatusIcon({ status }: { status: PipelineStep['status'] }) {
   return (
     <span style={{
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      width: '20px', height: '20px', borderRadius: '50%',
+      width: '13px', height: '13px', borderRadius: '50%',
       background: '#21262d', border: '1px solid #30363d',
-      fontSize: '11px', color: '#484f58', flexShrink: 0,
+      fontSize: '8px', color: '#484f58', flexShrink: 0,
     }}>⏳</span>
   );
 }
@@ -64,28 +64,28 @@ export function PipelineStatus({ steps }: PipelineStatusProps) {
 
   return (
     <div style={{
-      flexShrink: 0, margin: '0 16px 8px', padding: '12px 16px',
-      background: '#161b22', border: '1px solid #30363d', borderRadius: '10px',
+      flexShrink: 0, margin: '0 16px 4px', padding: '6px 10px',
+      background: '#161b22', border: '1px solid #30363d', borderRadius: '7px',
     }}>
       <div style={{
-        fontSize: '11px', color: '#484f58', fontWeight: 600,
-        marginBottom: '10px', letterSpacing: '0.5px',
+        fontSize: '9px', color: '#484f58', fontWeight: 600,
+        marginBottom: '5px', letterSpacing: '0.5px',
       }}>
         🚀 자동 완성 파이프라인
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
         {steps.map((step) => {
           const isRunning = step.status === 'running';
           const isDone = step.status === 'done';
           const isError = step.status === 'error';
 
           return (
-            <div key={step.id} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div key={step.id} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
               <StatusIcon status={step.status} />
-              <div style={{ display: 'flex', flex: 1, alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', flex: 1, alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
                 <span style={{
-                  fontSize: '12px',
+                  fontSize: '10px',
                   color: isDone ? '#3fb950' : isError ? '#d29922' : isRunning ? '#e6edf3' : '#484f58',
                   fontWeight: isRunning ? 600 : 400,
                   transition: 'color 0.3s',
@@ -93,11 +93,11 @@ export function PipelineStatus({ steps }: PipelineStatusProps) {
                   {step.label}
                 </span>
                 {isRunning && (
-                  <span style={{ fontSize: '11px', color: '#58a6ff' }}>진행 중...</span>
+                  <span style={{ fontSize: '9px', color: '#58a6ff' }}>진행 중...</span>
                 )}
                 {step.detail && (
                   <span style={{
-                    fontSize: '11px',
+                    fontSize: '9px',
                     color: isDone ? '#3fb95088' : '#d2992288',
                   }}>
                     — {step.detail}

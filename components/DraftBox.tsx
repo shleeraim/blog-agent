@@ -4,7 +4,8 @@ import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { toast } from 'sonner';
 import type { DraftResult } from '@/lib/types';
-import { buildToc, type TocEntry } from '@/lib/utils';
+import { buildToc, buildCopyMarkdown, copyAsHtml, type TocEntry } from '@/lib/utils';
+import { draftToHtml } from '@/lib/draftHtml';
 
 // ── Types ───────────────────────────────────────
 
@@ -173,12 +174,20 @@ export function DraftBox({
   onReset,
 }: DraftBoxProps) {
   const [copied, setCopied] = useState(false);
+  const [copiedHtml, setCopiedHtml] = useState(false);
 
   const handleCopy = async () => {
-    await navigator.clipboard.writeText(draft.content);
+    await navigator.clipboard.writeText(buildCopyMarkdown(draft.content));
     setCopied(true);
     onCopy();
     setTimeout(() => setCopied(false), 1500);
+  };
+
+  const handleCopyHtml = async () => {
+    await copyAsHtml(draftToHtml(draft.content), buildCopyMarkdown(draft.content));
+    setCopiedHtml(true);
+    onCopy();
+    setTimeout(() => setCopiedHtml(false), 1500);
   };
 
   return (
@@ -267,6 +276,17 @@ export function DraftBox({
             }}
           >
             {copied ? '✅ 복사됨!' : '📋 텍스트 복사'}
+          </button>
+          <button
+            onClick={handleCopyHtml}
+            style={{
+              flex: 1, padding: '10px 12px',
+              background: copiedHtml ? 'linear-gradient(135deg, #56d364, #3fb950)' : 'linear-gradient(135deg, #58a6ff, #388bfd)',
+              border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: 600,
+              color: '#0d1117', cursor: 'pointer', transition: 'all 0.2s',
+            }}
+          >
+            {copiedHtml ? '✅ 복사됨!' : '🌐 HTML 복사'}
           </button>
         </div>
 
