@@ -74,17 +74,19 @@ export function buildCopyMarkdown(content: string): string {
   return `${buildTocMarkdown(entries)}\n\n${injectTocAnchors(content)}`;
 }
 
-// HTML 클립보드 복사 — text/html을 지원하는 브라우저는 서식 있는 HTML로,
-// 그렇지 않으면 plainText로 폴백
-export async function copyAsHtml(html: string, plainText: string): Promise<void> {
+// HTML 클립보드 복사 — 서식 있는 에디터에는 text/html로, 텍스트 입력창(티스토리
+// HTML/마크다운 소스 모드 등)에는 text/plain으로 들어가는데, 이때도 "HTML 태그
+// 문자열 그대로"가 들어가야 한다. 여기에 마크다운을 넣으면 HTML 소스 입력창에
+// 마크다운 문법이 그대로 박혀버려서 깨진다 — 두 MIME 모두 같은 html을 채운다.
+export async function copyAsHtml(html: string): Promise<void> {
   if (typeof ClipboardItem !== 'undefined' && navigator.clipboard?.write) {
     const item = new ClipboardItem({
       'text/html': new Blob([html], { type: 'text/html' }),
-      'text/plain': new Blob([plainText], { type: 'text/plain' }),
+      'text/plain': new Blob([html], { type: 'text/plain' }),
     });
     await navigator.clipboard.write([item]);
   } else {
-    await navigator.clipboard.writeText(plainText);
+    await navigator.clipboard.writeText(html);
   }
 }
 

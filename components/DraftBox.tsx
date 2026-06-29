@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { toast } from 'sonner';
 import type { DraftResult } from '@/lib/types';
 import { buildToc, buildCopyMarkdown, copyAsHtml, type TocEntry } from '@/lib/utils';
@@ -184,7 +185,7 @@ export function DraftBox({
   };
 
   const handleCopyHtml = async () => {
-    await copyAsHtml(draftToHtml(draft.content), buildCopyMarkdown(draft.content));
+    await copyAsHtml(draftToHtml(draft.content));
     setCopiedHtml(true);
     onCopy();
     setTimeout(() => setCopiedHtml(false), 1500);
@@ -246,6 +247,7 @@ export function DraftBox({
       {/* 본문 마크다운 */}
       <div style={{ maxHeight: '420px', overflowY: 'auto', padding: '16px', background: '#0d1117', border: '1px solid #30363d', borderRadius: '8px', fontSize: '13px', color: '#e6edf3', lineHeight: 1.85 }}>
         <ReactMarkdown
+          remarkPlugins={[remarkGfm]}
           components={{
             h1: ({ children }) => <h1 style={{ fontFamily: "'Noto Serif KR', serif", fontSize: '20px', color: '#e6edf3', fontWeight: 700, marginBottom: '10px', borderBottom: '1px solid #30363d', paddingBottom: '8px' }}>{children}</h1>,
             h2: ({ children }) => <h2 style={{ fontFamily: "'Noto Serif KR', serif", fontSize: '16px', color: '#e6b84a', fontWeight: 700, marginTop: '20px', marginBottom: '8px' }}>{children}</h2>,
@@ -257,6 +259,9 @@ export function DraftBox({
             li: ({ children }) => <li style={{ marginBottom: '4px', lineHeight: 1.75 }}>{children}</li>,
             code: ({ children }) => <code style={{ fontFamily: "'DM Mono', monospace", fontSize: '12px', background: '#1c2330', padding: '1px 6px', borderRadius: '3px', color: '#e6b84a' }}>{children}</code>,
             blockquote: ({ children }) => <blockquote style={{ borderLeft: '3px solid #e6b84a', paddingLeft: '12px', color: '#8b949e', margin: '10px 0', fontStyle: 'italic' }}>{children}</blockquote>,
+            table: ({ children }) => <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '12px', fontSize: '12px' }}>{children}</table>,
+            th: ({ children }) => <th style={{ padding: '6px 10px', background: '#21262d', border: '1px solid #30363d', color: '#8b949e', fontWeight: 600, textAlign: 'left' }}>{children}</th>,
+            td: ({ children }) => <td style={{ padding: '6px 10px', border: '1px solid #30363d', color: '#c9d1d9' }}>{children}</td>,
           }}
         >
           {draft.content}

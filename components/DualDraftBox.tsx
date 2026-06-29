@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { toast } from 'sonner';
 import {
   AlertDialog,
@@ -219,7 +220,7 @@ function DraftPanel({
   };
 
   const handleCopyHtml = async () => {
-    await copyAsHtml(draftToHtml(draft.content), buildCopyMarkdown(draft.content));
+    await copyAsHtml(draftToHtml(draft.content));
     setCopiedHtml(true);
     onCopyOne(index);
     toast('🌐 HTML로 복사됐습니다! 티스토리 HTML 모드에 붙여넣기 하세요.', {
@@ -308,7 +309,7 @@ function DraftPanel({
           lineHeight: 1.85,
         }}
       >
-        <ReactMarkdown components={mdComponents}>{draft.content}</ReactMarkdown>
+        <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>{draft.content}</ReactMarkdown>
       </div>
 
       {/* SEO 팁 */}

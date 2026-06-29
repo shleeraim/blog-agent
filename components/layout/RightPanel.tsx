@@ -64,7 +64,7 @@ export function RightPanel() {
 
   const handleCopyHtml = async () => {
     if (!draft) return;
-    await copyAsHtml(draftToHtml(draft.content), buildCopyMarkdown(draft.content));
+    await copyAsHtml(draftToHtml(draft.content));
     setCopiedHtml(true);
     setTimeout(() => setCopiedHtml(false), 2000);
   };

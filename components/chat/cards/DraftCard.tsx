@@ -88,7 +88,7 @@ export function DraftCard({ data }: { data: DraftResult }) {
   };
 
   const handleCopyHtml = async () => {
-    await copyAsHtml(draftToHtml(data.content), buildCopyMarkdown(data.content));
+    await copyAsHtml(draftToHtml(data.content));
     setCopiedHtml(true);
     toast('🌐 티스토리 HTML 모드에 붙여넣기 하세요!', {
       duration: 3000,

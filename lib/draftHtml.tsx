@@ -2,6 +2,7 @@
 
 import { renderToStaticMarkup } from 'react-dom/server';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { buildToc, type TocEntry } from '@/lib/utils';
 
 // 본문 마크다운 → 티스토리 HTML 모드에 그대로 붙여넣을 수 있는 HTML 문자열로 변환.
@@ -10,6 +11,7 @@ import { buildToc, type TocEntry } from '@/lib/utils';
 function markdownBodyToHtml(content: string, entries: TocEntry[]): string {
   const rawHtml = renderToStaticMarkup(
     <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
       components={{
         h1: ({ children }) => <h1 style={{ fontSize: '22px', fontWeight: 700, margin: '0 0 12px' }}>{children}</h1>,
         h2: ({ children }) => <h2 style={{ fontSize: '19px', fontWeight: 700, margin: '28px 0 10px' }}>{children}</h2>,
